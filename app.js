@@ -1,107 +1,165 @@
 // Simple spaced-repetition using SM-2 algorithm
 
+// ==================== AUTHENTICATION ====================
 
-// --- Persistence (IndexedDB) -------------------------------------------------
+// Initialize Supabase and check authentication on page load
+document.addEventListener('DOMContentLoaded', async () => {
+    const authSection = document.getElementById('auth-section');
+    const appContainer = document.getElementById('app-container');
+    const loginFormContainer = document.getElementById('login-form-container');
+    const registerFormContainer = document.getElementById('register-form-container');
+    const loginForm = document.getElementById('login-form');
+    const registerForm = document.getElementById('register-form');
+    const showRegisterLink = document.getElementById('show-register');
+    const showLoginLink = document.getElementById('show-login');
+    const logoutBtn = document.getElementById('logout-btn');
+    const userEmailSpan = document.getElementById('user-email');
 
-// All card data is now stored inside the browser's IndexedDB instead of
-// LocalStorage so we can scale beyond the 5 MB quota and avoid synchronous
-// blocking calls.
-
-const DB_NAME = 'flashcards-db';
-const DB_VERSION = 1;
-const STORE_NAME = 'cards';
-
-/**
- * Open (or create) the app database. On first run it provisions an object
- * store using `id` as the primary key.
- *
- * @returns {Promise<IDBDatabase>}
- */
-function openDB() {
-    if (!('indexedDB' in window)) {
-        return Promise.reject(new Error('IndexedDB is not supported in this environment'));
+    // Initialize Supabase
+    if (!window.authService.initSupabase()) {
+        alert('Error: Supabase is not configured. Please update config.js with your Supabase credentials.');
+        return;
     }
 
-    return new Promise((resolve, reject) => {
-        const request = indexedDB.open(DB_NAME, DB_VERSION);
+    // Check if user is already logged in
+    const user = await window.authService.getCurrentUser();
+    if (user) {
+        showApp(user);
+    } else {
+        authSection.classList.remove('hidden');
+    }
 
-        request.onupgradeneeded = () => {
-            const db = request.result;
-            if (!db.objectStoreNames.contains(STORE_NAME)) {
-                db.createObjectStore(STORE_NAME, { keyPath: 'id' });
-            }
-        };
-
-        request.onsuccess = () => resolve(request.result);
-        request.onerror = () => reject(request.error);
+    // Switch to register form
+    showRegisterLink.addEventListener('click', (e) => {
+        e.preventDefault();
+        loginFormContainer.classList.add('hidden');
+        registerFormContainer.classList.remove('hidden');
+        document.getElementById('login-error').classList.add('hidden');
     });
-}
 
-/**
- * Load all stored cards from IndexedDB.
- *
- * @returns {Promise<Flashcard[]>} Array of cards (may be empty)
- */
-async function loadCards() {
-    try {
-        const db = await openDB();
-        return new Promise((resolve, reject) => {
-            const tx = db.transaction(STORE_NAME, 'readonly');
-            const store = tx.objectStore(STORE_NAME);
-            const req = store.getAll();
-            req.onsuccess = () => {
-                const result = req.result || [];
-                // Ensure newer fields exist
-                result.forEach((card, idx) => {
-                    if (typeof card.pinned !== 'boolean') card.pinned = false;
-                    if (typeof card.order !== 'number') card.order = idx;
-                });
-                resolve(result);
-            };
-            req.onerror = () => reject(req.error);
-        });
-    } catch (err) {
-        console.error('Error loading cards from IndexedDB', err);
-        return [];
-    }
-}
+    // Switch to login form
+    showLoginLink.addEventListener('click', (e) => {
+        e.preventDefault();
+        registerFormContainer.classList.add('hidden');
+        loginFormContainer.classList.remove('hidden');
+        document.getElementById('register-error').classList.add('hidden');
+        document.getElementById('register-success').classList.add('hidden');
+    });
 
-/**
- * Persist the provided set of cards to IndexedDB. The strategy is simple but
- * robust: clear the store and then put all current cards. For the modest data
- * sizes of a flash-card deck this is fast and keeps the logic trivial.
- *
- * Any failure is logged and surfaced to the user once per session.
- *
- * @param {Flashcard[]} cards
- */
-async function saveCards(cards) {
-    try {
-        const db = await openDB();
-        await new Promise((resolve, reject) => {
-            const tx = db.transaction(STORE_NAME, 'readwrite');
-            const store = tx.objectStore(STORE_NAME);
+    // Handle registration
+    registerForm.addEventListener('submit', async (e) => {
+        e.preventDefault();
+        const email = document.getElementById('register-email').value;
+        const password = document.getElementById('register-password').value;
+        const confirmPassword = document.getElementById('register-password-confirm').value;
+        const errorEl = document.getElementById('register-error');
+        const successEl = document.getElementById('register-success');
 
-            // Clear previous state so removed cards disappear.
-            store.clear();
+        errorEl.classList.add('hidden');
+        successEl.classList.add('hidden');
 
-            for (const card of cards) {
-                store.put(card);
-            }
-
-            tx.oncomplete = () => resolve();
-            tx.onerror = () => reject(tx.error);
-            tx.onabort = () => reject(tx.error);
-        });
-    } catch (err) {
-        console.error('Failed to write to IndexedDB', err);
-
-        if (!saveCards._warned) {
-            alert('⚠️  Failed to save cards to your browser storage. Changes will only last until you refresh this tab.');
-            saveCards._warned = true;
+        if (password !== confirmPassword) {
+            errorEl.textContent = 'Passwords do not match';
+            errorEl.classList.remove('hidden');
+            return;
         }
+
+        if (password.length < 6) {
+            errorEl.textContent = 'Password must be at least 6 characters';
+            errorEl.classList.remove('hidden');
+            return;
+        }
+
+        const result = await window.authService.register(email, password);
+
+        if (result.success) {
+            successEl.textContent = 'Registration successful! Please check your email to verify your account, then login.';
+            successEl.classList.remove('hidden');
+            registerForm.reset();
+
+            // Auto-switch to login after 3 seconds
+            setTimeout(() => {
+                registerFormContainer.classList.add('hidden');
+                loginFormContainer.classList.remove('hidden');
+                successEl.classList.add('hidden');
+            }, 3000);
+        } else {
+            errorEl.textContent = result.error;
+            errorEl.classList.remove('hidden');
+        }
+    });
+
+    // Handle login
+    loginForm.addEventListener('submit', async (e) => {
+        e.preventDefault();
+        const email = document.getElementById('login-email').value;
+        const password = document.getElementById('login-password').value;
+        const errorEl = document.getElementById('login-error');
+
+        errorEl.classList.add('hidden');
+
+        const result = await window.authService.login(email, password);
+
+        if (result.success) {
+            showApp(result.user);
+        } else {
+            errorEl.textContent = result.error;
+            errorEl.classList.remove('hidden');
+        }
+    });
+
+    // Handle logout
+    logoutBtn.addEventListener('click', async () => {
+        const result = await window.authService.logout();
+        if (result.success) {
+            appContainer.classList.add('hidden');
+            authSection.classList.remove('hidden');
+            loginForm.reset();
+            registerForm.reset();
+
+            // Clear any local state
+            cards = [];
+            renderCardList();
+            renderReviewList();
+        }
+    });
+
+    // Show the main app after successful authentication
+    async function showApp(user) {
+        window.authService.currentUser = user;
+        userEmailSpan.textContent = user.email;
+        authSection.classList.add('hidden');
+        appContainer.classList.remove('hidden');
+
+        // Load user's cards from Supabase
+        await initApp();
     }
-}
+
+    // Initialize app - load cards and render
+    async function initApp() {
+        cards = await window.authService.loadCards();
+        normalizeOrders();
+        await window.authService.saveCards(cards); // Ensure normalized orders are saved
+
+        renderCardList();
+        renderReviewList();
+
+        // Default landing view: Study section
+        startStudy();
+        reviewSection.classList.add("hidden");
+        addSection.classList.add('hidden');
+        studySection.classList.remove('hidden');
+    }
+});
+
+// --- Persistence (SUPABASE - replaced IndexedDB) -------------------------------------------------
+
+// All card data is now stored in Supabase cloud database instead of IndexedDB.
+// The loadCards() and saveCards() functions are now provided by auth.js
+
+// Use auth service functions
+const loadCards = () => window.authService.loadCards();
+const saveCards = (cards) => window.authService.saveCards(cards);
 
 function normalizeOrders() {
     const pinned = cards.filter(c => c.pinned).sort((a, b) => a.order - b.order);
@@ -178,13 +236,9 @@ if (generateAudioBtn) {
             return;
         }
 
-        // Ask for API key (stored in LocalStorage for convenience)
-        let apiKey = localStorage.getItem('openai_api_key');
-        if (!apiKey) {
-            apiKey = prompt('Enter your OpenAI API key (it will be stored locally):');
-            if (!apiKey) return;
-            localStorage.setItem('openai_api_key', apiKey);
-        }
+        // Ask for API key (stored in Supabase user settings)
+        let apiKey = await getApiKey();
+        if (!apiKey) return;
 
         try {
             generateStatus.classList.remove('hidden');
@@ -218,7 +272,7 @@ if (genParagraphVoiceBtn) {
             return;
         }
 
-        let apiKey = getApiKey();
+        let apiKey = await getApiKey();
         if (!apiKey) return;
 
         try {
@@ -250,7 +304,7 @@ if (genParagraphTranslationBtn) {
             return;
         }
 
-        let apiKey = getApiKey();
+        let apiKey = await getApiKey();
         if (!apiKey) return;
 
         try {
@@ -282,7 +336,7 @@ if (genSentenceBtn) {
             return;
         }
 
-        let apiKey = getApiKey();
+        let apiKey = await getApiKey();
         if (!apiKey) return;
 
         try {
@@ -326,7 +380,7 @@ if (genVoiceBtn) {
             return;
         }
 
-        let apiKey = getApiKey();
+        let apiKey = await getApiKey();
         if (!apiKey) return;
 
         try {
@@ -356,11 +410,14 @@ if (genVoiceBtn) {
     });
 }
 
-function getApiKey() {
-    let key = localStorage.getItem('openai_api_key');
+async function getApiKey() {
+    // Try to get from Supabase user settings
+    let key = await window.authService.getUserAPIKey();
     if (!key) {
-        key = prompt('Enter your OpenAI API key (it will be stored locally):');
-        if (key) localStorage.setItem('openai_api_key', key);
+        key = prompt('Enter your OpenAI API key (it will be stored securely in the cloud):');
+        if (key) {
+            await window.authService.saveUserAPIKey(key);
+        }
     }
     return key;
 }
@@ -521,11 +578,11 @@ const reviewSpeedToggleBtn = document.getElementById("review-speed-toggle-btn");
 const reviewShowAnswerBtn = document.getElementById("review-show-answer");
 const saveStatusEl = document.getElementById('save-status');
 
-function autoSaveCard(question, answer, audioData) {
+async function autoSaveCard(question, answer, audioData) {
     if (editingCardId) {
-        updateExistingCard(editingCardId, question, answer, audioData);
+        await updateExistingCard(editingCardId, question, answer, audioData);
     } else {
-        createCard(question, answer, audioData);
+        await createCard(question, answer, audioData);
     }
     showSavedStatus('Card saved!');
 }
@@ -666,7 +723,7 @@ function renderCardList() {
         const delBtn = document.createElement('button');
         delBtn.textContent = 'Delete';
         delBtn.classList.add('delete-btn');
-        delBtn.addEventListener('click', () => deleteCard(card.id));
+        delBtn.addEventListener('click', async () => await deleteCard(card.id));
 
         btnContainer.appendChild(editBtn);
         btnContainer.appendChild(delBtn);
@@ -713,7 +770,7 @@ function renderReviewList() {
         pinBtn.className = "pin-btn" + (card.pinned ? " pinned" : "");
         pinBtn.textContent = card.pinned ? "📌" : "📍";
         pinBtn.title = card.pinned ? "Unpin" : "Pin";
-        pinBtn.addEventListener("click", (e) => {
+        pinBtn.addEventListener("click", async (e) => {
             e.stopPropagation();
             card.pinned = !card.pinned;
             if (card.pinned) {
@@ -724,7 +781,7 @@ function renderReviewList() {
                 card.order = maxOrder + 1;
             }
             normalizeOrders();
-            saveCards(cards);
+            await saveCards(cards);
             renderReviewList();
         });
         li.appendChild(pinBtn);
@@ -744,7 +801,7 @@ function renderReviewList() {
     }
 }
 
-function handleReviewDrop(e) {
+async function handleReviewDrop(e) {
     e.preventDefault();
     if (!dragSrcId) return;
     const targetLi = e.target.closest('li');
@@ -790,7 +847,7 @@ function handleReviewDrop(e) {
 
     cards = [...pinned, ...unpinned];
     normalizeOrders();
-    saveCards(cards);
+    await saveCards(cards);
     renderReviewList();
 }
 
@@ -811,10 +868,17 @@ function beginEdit(id) {
     studySection.classList.add('hidden');
 }
 
-function deleteCard(id) {
+async function deleteCard(id) {
     // Straight-forward deletion without confirmation dialog
+    const card = cards.find(c => c.id === id);
+
+    // Delete audio from storage if it exists
+    if (card && card.audioData) {
+        await window.authService.deleteAudio(card.audioData);
+    }
+
     cards = cards.filter((c) => c.id !== id);
-    saveCards(cards);
+    await saveCards(cards);
     renderCardList();
     renderReviewList();
     updateDueCount();
@@ -841,21 +905,22 @@ let dragSrcId = null;
 
 // Kick-off once everything is parsed. By placing this at the end of the file
 // we make sure all functions & event-listeners are already defined.
-(async function init() {
-    cards = await loadCards();
-    normalizeOrders();
-    saveCards(cards);
+// NOTE: This is now called from the DOMContentLoaded event after authentication
+// (async function init() {
+//     cards = await loadCards();
+//     normalizeOrders();
+//     saveCards(cards);
 
-    renderCardList();
-    renderReviewList();
+//     renderCardList();
+//     renderReviewList();
 
-    renderReviewList();
-    // Default landing view: Study section
-    startStudy();
-    reviewSection.classList.add("hidden");
-    addSection.classList.add('hidden');
-    studySection.classList.remove('hidden');
-})();
+//     renderReviewList();
+//     // Default landing view: Study section
+//     startStudy();
+//     reviewSection.classList.add("hidden");
+//     addSection.classList.add('hidden');
+//     studySection.classList.remove('hidden');
+// })();
 
 // ---- Navigation ----
 navAdd.addEventListener('click', () => {
@@ -893,44 +958,71 @@ navImport.addEventListener('click', () => importFileInput.click());
 
 // ---- Skip Day ----
 if (skipDayBtn) {
-    skipDayBtn.addEventListener('click', () => {
-        skipOneDay();
+    skipDayBtn.addEventListener('click', async () => {
+        await skipOneDay();
     });
 }
 
-function skipOneDay() {
+async function skipOneDay() {
     const millisInDay = 24 * 60 * 60 * 1000;
     cards.forEach((card) => {
         card.nextReview -= millisInDay;
     });
-    saveCards(cards);
+    await saveCards(cards);
     updateDueCount();
     showNextCard();
 }
 
-importFileInput.addEventListener('change', (e) => {
+importFileInput.addEventListener('change', async (e) => {
     const file = e.target.files[0];
     if (!file) return;
     const reader = new FileReader();
-    reader.onload = (ev) => {
+    reader.onload = async (ev) => {
         try {
             const imported = JSON.parse(ev.target.result);
             if (Array.isArray(imported)) {
-                cards = imported.map((c, idx) => ({
-                    ...c,
-                    pinned: !!c.pinned,
-                    order: typeof c.order === 'number' ? c.order : idx
-                }));
+                // Show progress message
+                alert('Importing cards... This may take a moment if there are audio files to upload.');
+
+                // Process cards and upload audio if needed
+                const processedCards = [];
+                for (let i = 0; i < imported.length; i++) {
+                    const c = imported[i];
+                    let audioUrl = c.audioData;
+
+                    // If audio is a base64 data URL, upload to Supabase Storage
+                    if (audioUrl && audioUrl.startsWith('data:')) {
+                        try {
+                            const audioBlob = window.authService.dataURLtoBlob(audioUrl);
+                            const cardId = c.id || (Date.now().toString(36) + Math.random().toString(36).slice(2));
+                            audioUrl = await window.authService.uploadAudio(audioBlob, cardId);
+                            console.log(`Uploaded audio for card ${i + 1}/${imported.length}`);
+                        } catch (error) {
+                            console.error('Error uploading audio for card:', c.id, error);
+                            // Keep the data URL if upload fails
+                        }
+                    }
+
+                    processedCards.push({
+                        ...c,
+                        audioData: audioUrl,
+                        pinned: !!c.pinned,
+                        order: typeof c.order === 'number' ? c.order : i
+                    });
+                }
+
+                cards = processedCards;
                 normalizeOrders();
-                saveCards(cards);
+                await saveCards(cards);
                 renderCardList();
                 renderReviewList();
-                alert('Import successful!');
+                alert('Import successful! All cards have been uploaded to the cloud.');
             } else {
                 alert('Invalid file');
             }
         } catch (err) {
-            alert('Error parsing file');
+            console.error('Import error:', err);
+            alert('Error importing file: ' + err.message);
         }
     };
     reader.readAsText(file);
@@ -946,11 +1038,11 @@ if (saveCardBtn) {
     const answer = answerInput.value.trim();
     if (!question || !answer) return;
 
-    const handleData = (audioData) => {
+    const handleData = async (audioData) => {
         if (editingCardId) {
-            updateExistingCard(editingCardId, question, answer, audioData);
+            await updateExistingCard(editingCardId, question, answer, audioData);
         } else {
-            createCard(question, answer, audioData);
+            await createCard(question, answer, audioData);
         }
     };
 
@@ -978,17 +1070,34 @@ if (saveCardBtn) {
         audioData = existing ? existing.audioData : null;
     }
 
-    handleData(audioData);
+    await handleData(audioData);
 });
 }
 
-function createCard(question, answer, audioData) {
+async function createCard(question, answer, audioData) {
     const maxOrder = cards.reduce((m, c) => Math.max(m, typeof c.order === 'number' ? c.order : -1), -1);
+    const cardId = Date.now().toString(36) + Math.random().toString(36).slice(2);
+
+    // Upload audio to Supabase Storage if it's a data URL
+    let audioUrl = null;
+    if (audioData && audioData.startsWith('data:')) {
+        try {
+            const audioBlob = window.authService.dataURLtoBlob(audioData);
+            audioUrl = await window.authService.uploadAudio(audioBlob, cardId);
+        } catch (error) {
+            console.error('Error uploading audio:', error);
+            alert('Failed to upload audio. The card will be saved without audio.');
+        }
+    } else if (audioData) {
+        // Already a URL (from cloud storage)
+        audioUrl = audioData;
+    }
+
     const card = {
-        id: Date.now().toString(36) + Math.random().toString(36).slice(2),
+        id: cardId,
         question,
         answer,
-        audioData, // base64 or null
+        audioData: audioUrl, // Cloud storage URL or null
         interval: 0,
         repetitions: 0,
         easeFactor: 2.5,
@@ -998,7 +1107,7 @@ function createCard(question, answer, audioData) {
     };
     cards.push(card);
     normalizeOrders();
-    saveCards(cards);
+    await saveCards(cards);
 
     // reset form
     if (promptInput) promptInput.value = '';
@@ -1013,15 +1122,40 @@ function createCard(question, answer, audioData) {
     renderReviewList();
 }
 
-function updateExistingCard(id, question, answer, audioData) {
+async function updateExistingCard(id, question, answer, audioData) {
     const card = cards.find(c => c.id === id);
     if (!card) return;
 
     card.question = question;
     card.answer = answer;
-    if (audioData !== undefined) card.audioData = audioData;
 
-    saveCards(cards);
+    // Handle audio update
+    if (audioData !== undefined) {
+        // If new audio is a data URL, upload to Supabase Storage
+        if (audioData && audioData.startsWith('data:')) {
+            try {
+                // Delete old audio if it exists
+                if (card.audioData) {
+                    await window.authService.deleteAudio(card.audioData);
+                }
+                // Upload new audio
+                const audioBlob = window.authService.dataURLtoBlob(audioData);
+                card.audioData = await window.authService.uploadAudio(audioBlob, id);
+            } catch (error) {
+                console.error('Error uploading audio:', error);
+                alert('Failed to upload audio. The card will be saved with previous audio.');
+            }
+        } else {
+            // Either null (remove audio) or already a URL
+            if (audioData === null && card.audioData) {
+                // Delete audio from storage
+                await window.authService.deleteAudio(card.audioData);
+            }
+            card.audioData = audioData;
+        }
+    }
+
+    await saveCards(cards);
 
     editingCardId = null;
     saveCardBtn.textContent = 'Save Card';
@@ -1213,12 +1347,12 @@ if (speedToggleBtn) {
 
 // rating buttons
 ratingButtons.forEach((btn) => {
-    btn.addEventListener('click', () => {
+    btn.addEventListener('click', async () => {
         const value = btn.dataset.rating;
         if (!currentCard) return;
         const isEasy = value === 'easy';
         processRatingBinary(currentCard, isEasy);
-        saveCards(cards);
+        await saveCards(cards);
         updateDueCount();
         showNextCard();
     });
