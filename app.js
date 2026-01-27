@@ -17,6 +17,9 @@ document.addEventListener('DOMContentLoaded', async () => {
     const logoutBtn = document.getElementById('logout-btn');
     const userEmailSpan = document.getElementById('user-email');
 
+    // Track whether Supabase was initialized successfully
+    let supabaseInitialized = false;
+
     // Set up login/register toggle handlers FIRST so they always work
     // even if Supabase or authService fails to load
     showRegisterLink.addEventListener('click', (e) => {
@@ -34,52 +37,7 @@ document.addEventListener('DOMContentLoaded', async () => {
         document.getElementById('register-success').classList.add('hidden');
     });
 
-    // Check if required scripts are loaded
-    if (typeof window.supabase === 'undefined') {
-        console.error('Supabase library not loaded');
-        authSection.classList.remove('hidden');
-        return;
-    }
-
-    if (typeof window.authService === 'undefined') {
-        console.error('authService not found - auth.js may have failed to load');
-        authSection.classList.remove('hidden');
-        return;
-    }
-
-    if (typeof window.SUPABASE_CONFIG === 'undefined') {
-        console.error('SUPABASE_CONFIG not found - config.js may have failed to load');
-        authSection.classList.remove('hidden');
-        return;
-    }
-
-    console.log('All required scripts loaded');
-
-    // Initialize Supabase
-    const supabaseInitialized = window.authService.initSupabase();
-    console.log('Supabase initialized:', supabaseInitialized);
-
-    if (!supabaseInitialized) {
-        console.error('Supabase initialization failed - config not set');
-        // Still continue to set up event handlers so the form works for debugging
-        authSection.classList.remove('hidden');
-    } else {
-        // Check if user is already logged in
-        try {
-            const user = await window.authService.getCurrentUser();
-            console.log('Current user:', user ? user.email : 'none');
-            if (user) {
-                showApp(user);
-            } else {
-                authSection.classList.remove('hidden');
-            }
-        } catch (error) {
-            console.error('Error checking current user:', error);
-            authSection.classList.remove('hidden');
-        }
-    }
-
-    // Handle registration
+    // Handle registration - register handler BEFORE any async work
     registerForm.addEventListener('submit', async (e) => {
         console.log('Register form submitted');
         e.preventDefault();
@@ -116,6 +74,10 @@ document.addEventListener('DOMContentLoaded', async () => {
             return;
         }
 
+        const submitBtn = registerForm.querySelector('button[type="submit"]');
+        submitBtn.disabled = true;
+        submitBtn.textContent = 'Registering...';
+
         try {
             console.log('Calling authService.register...');
             const result = await window.authService.register(email, password);
@@ -150,10 +112,13 @@ document.addEventListener('DOMContentLoaded', async () => {
             console.error('Registration error:', error);
             errorEl.textContent = 'An unexpected error occurred: ' + error.message;
             errorEl.classList.remove('hidden');
+        } finally {
+            submitBtn.disabled = false;
+            submitBtn.textContent = 'Register';
         }
     });
 
-    // Handle login
+    // Handle login - register handler BEFORE any async work
     loginForm.addEventListener('submit', async (e) => {
         console.log('Login form submitted');
         e.preventDefault();
@@ -173,6 +138,10 @@ document.addEventListener('DOMContentLoaded', async () => {
             return;
         }
 
+        const submitBtn = loginForm.querySelector('button[type="submit"]');
+        submitBtn.disabled = true;
+        submitBtn.textContent = 'Logging in...';
+
         try {
             console.log('Calling authService.login...');
             const result = await window.authService.login(email, password);
@@ -188,6 +157,9 @@ document.addEventListener('DOMContentLoaded', async () => {
             console.error('Login error:', error);
             errorEl.textContent = 'An unexpected error occurred: ' + error.message;
             errorEl.classList.remove('hidden');
+        } finally {
+            submitBtn.disabled = false;
+            submitBtn.textContent = 'Login';
         }
     });
 
@@ -234,7 +206,55 @@ document.addEventListener('DOMContentLoaded', async () => {
         studySection.classList.remove('hidden');
     }
 
-    console.log('App initialization complete. All event handlers registered.');
+    console.log('All event handlers registered.');
+
+    // --- Now do async initialization (after all handlers are registered) ---
+
+    // Check if required scripts are loaded
+    if (typeof window.supabase === 'undefined') {
+        console.error('Supabase library not loaded');
+        authSection.classList.remove('hidden');
+        return;
+    }
+
+    if (typeof window.authService === 'undefined') {
+        console.error('authService not found - auth.js may have failed to load');
+        authSection.classList.remove('hidden');
+        return;
+    }
+
+    if (typeof window.SUPABASE_CONFIG === 'undefined') {
+        console.error('SUPABASE_CONFIG not found - config.js may have failed to load');
+        authSection.classList.remove('hidden');
+        return;
+    }
+
+    console.log('All required scripts loaded');
+
+    // Initialize Supabase
+    supabaseInitialized = window.authService.initSupabase();
+    console.log('Supabase initialized:', supabaseInitialized);
+
+    if (!supabaseInitialized) {
+        console.error('Supabase initialization failed - config not set');
+        authSection.classList.remove('hidden');
+    } else {
+        // Check if user is already logged in
+        try {
+            const user = await window.authService.getCurrentUser();
+            console.log('Current user:', user ? user.email : 'none');
+            if (user) {
+                showApp(user);
+            } else {
+                authSection.classList.remove('hidden');
+            }
+        } catch (error) {
+            console.error('Error checking current user:', error);
+            authSection.classList.remove('hidden');
+        }
+    }
+
+    console.log('App initialization complete.');
 });
 
 // --- Persistence (SUPABASE - replaced IndexedDB) -------------------------------------------------
