@@ -122,9 +122,19 @@ document.addEventListener('DOMContentLoaded', async () => {
             console.log('Register result:', result);
 
             if (result.success) {
+                registerForm.reset();
+
+                // If Supabase returned a session, the user is already confirmed
+                // (email confirmation is disabled) — log them in directly
+                if (result.data && result.data.session) {
+                    console.log('Session returned — email confirmation not required, logging in');
+                    showApp(result.data.session.user);
+                    return;
+                }
+
+                // Otherwise email confirmation is required
                 successEl.textContent = 'Registration successful! Please check your email to verify your account, then login.';
                 successEl.classList.remove('hidden');
-                registerForm.reset();
 
                 // Auto-switch to login after 3 seconds
                 setTimeout(() => {
