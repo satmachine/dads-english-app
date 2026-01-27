@@ -217,22 +217,22 @@ async function saveCards(cards) {
             return;
         }
 
-        // Delete all existing cards for this user
-        const { error: deleteError } = await supabaseClient
+        // Fetch existing card IDs so we can detect deletions
+        const { data: existingCards, error: fetchError } = await supabaseClient
             .from('cards')
-            .delete()
+            .select('id')
             .eq('user_id', currentUser.id);
 
-        if (deleteError) throw deleteError;
+        if (fetchError) throw fetchError;
 
-        // Insert all cards
+        // Upsert all current cards (safe: creates or updates, never deletes)
         if (cards.length > 0) {
-            const cardsToInsert = cards.map(card => ({
+            const cardsToUpsert = cards.map(card => ({
                 id: card.id,
                 user_id: currentUser.id,
                 question: card.question,
                 answer: card.answer,
-                audio_url: card.audioData, // Changed from audioData to audio_url
+                audio_url: card.audioData,
                 interval: card.interval || 0,
                 repetitions: card.repetitions || 0,
                 ease_factor: card.easeFactor || 2.5,
@@ -241,11 +241,25 @@ async function saveCards(cards) {
                 order_index: card.order || 0
             }));
 
-            const { error: insertError } = await supabaseClient
+            const { error: upsertError } = await supabaseClient
                 .from('cards')
-                .insert(cardsToInsert);
+                .upsert(cardsToUpsert);
 
-            if (insertError) throw insertError;
+            if (upsertError) throw upsertError;
+        }
+
+        // Only delete cards the user explicitly removed (exist in DB but not locally)
+        if (existingCards && existingCards.length > 0) {
+            const localIds = new Set(cards.map(c => c.id));
+            const toDelete = existingCards.filter(c => !localIds.has(c.id)).map(c => c.id);
+            if (toDelete.length > 0) {
+                const { error: deleteError } = await supabaseClient
+                    .from('cards')
+                    .delete()
+                    .in('id', toDelete);
+
+                if (deleteError) throw deleteError;
+            }
         }
     } catch (error) {
         console.error('Error saving cards:', error);

@@ -194,7 +194,6 @@ document.addEventListener('DOMContentLoaded', async () => {
     async function initApp() {
         cards = await window.authService.loadCards();
         normalizeOrders();
-        await window.authService.saveCards(cards); // Ensure normalized orders are saved
 
         renderCardList();
         renderReviewList();
