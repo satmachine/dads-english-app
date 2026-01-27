@@ -3,12 +3,75 @@
 <head>
     <meta charset="UTF-8" />
     <meta name="viewport" content="width=device-width, initial-scale=1.0" />
-    <title>Local Spaced-Repetition Flashcards</title>
+    <title>Dad's English App - Spaced-Repetition Flashcards</title>
     <link rel="stylesheet" href="style.css" />
+    <script src="https://cdn.jsdelivr.net/npm/@supabase/supabase-js@2"></script>
+    <script src="config.js"></script>
 </head>
 <body>
+    <!-- Authentication Section -->
+    <section id="auth-section" class="auth-container">
+        <div class="auth-box">
+            <h1>Dad's English App</h1>
+            <p class="auth-subtitle">Spaced-Repetition Flashcards</p>
+
+            <!-- Login Form -->
+            <div id="login-form-container">
+                <h2>Login</h2>
+                <form id="login-form">
+                    <label>
+                        Email
+                        <input type="email" id="login-email" required autocomplete="email" />
+                    </label>
+                    <label>
+                        Password
+                        <input type="password" id="login-password" required autocomplete="current-password" />
+                    </label>
+                    <button type="submit" class="primary-btn">Login</button>
+                    <p id="login-error" class="error-message hidden"></p>
+                </form>
+                <p class="auth-switch">
+                    Don't have an account? <a href="#" id="show-register">Register</a>
+                </p>
+            </div>
+
+            <!-- Register Form -->
+            <div id="register-form-container" class="hidden">
+                <h2>Create Account</h2>
+                <form id="register-form">
+                    <label>
+                        Email
+                        <input type="email" id="register-email" required autocomplete="email" />
+                    </label>
+                    <label>
+                        Password
+                        <input type="password" id="register-password" required autocomplete="new-password" />
+                    </label>
+                    <label>
+                        Confirm Password
+                        <input type="password" id="register-password-confirm" required autocomplete="new-password" />
+                    </label>
+                    <button type="submit" class="primary-btn">Register</button>
+                    <p id="register-error" class="error-message hidden"></p>
+                    <p id="register-success" class="success-message hidden"></p>
+                </form>
+                <p class="auth-switch">
+                    Already have an account? <a href="#" id="show-login">Login</a>
+                </p>
+            </div>
+        </div>
+    </section>
+
+    <!-- Main App (hidden until authenticated) -->
+    <div id="app-container" class="hidden">
     <header>
-        <h1>Spaced-Repetition Flashcards</h1>
+        <div class="header-content">
+            <h1>Dad's English App</h1>
+            <div class="user-info">
+                <span id="user-email"></span>
+                <button id="logout-btn" class="small-nav">Logout</button>
+            </div>
+        </div>
         <nav>
             <button id="nav-study">Test</button>
             <button id="nav-review">Study</button>
@@ -63,7 +126,7 @@
             </form>
             <h3>Your Cards</h3>
             <ul id="card-list"></ul>
-            <p class="note">Cards are stored locally in your browser (IndexedDB).</p>
+            <p class="note">Cards are stored in the cloud and synced across all your devices.</p>
         </section>
         <!-- Study section -->
         <section id="review-section" class="hidden">
@@ -118,10 +181,12 @@
 
     <footer>
         <small>
-            All data is stored in your own browser using IndexedDB. You can export/import JSON for backup.
+            All data is securely stored in the cloud and synced across your devices. You can export/import JSON for backup.
         </small>
     </footer>
+    </div><!-- end app-container -->
 
+    <script src="auth.js"></script>
     <script src="app.js"></script>
 </body>
 </html>
