@@ -9,6 +9,9 @@ let currentUser = null;
  * Initialize the Supabase client
  */
 function initSupabase() {
+    console.log('initSupabase called');
+    console.log('SUPABASE_CONFIG:', window.SUPABASE_CONFIG);
+
     if (!window.SUPABASE_CONFIG || !window.SUPABASE_CONFIG.url || !window.SUPABASE_CONFIG.anonKey) {
         console.error('Supabase configuration is missing. Please update config.js with your Supabase credentials.');
         return false;
@@ -16,14 +19,18 @@ function initSupabase() {
 
     if (window.SUPABASE_CONFIG.url === 'YOUR_SUPABASE_URL' || window.SUPABASE_CONFIG.anonKey === 'YOUR_SUPABASE_ANON_KEY') {
         console.error('Please update config.js with your actual Supabase credentials.');
+        console.error('Current URL:', window.SUPABASE_CONFIG.url);
+        console.error('Current key:', window.SUPABASE_CONFIG.anonKey.substring(0, 20) + '...');
         showError('login-error', 'Supabase is not configured. Please check config.js');
         return false;
     }
 
+    console.log('Creating Supabase client with URL:', window.SUPABASE_CONFIG.url);
     supabase = window.supabase.createClient(
         window.SUPABASE_CONFIG.url,
         window.SUPABASE_CONFIG.anonKey
     );
+    console.log('Supabase client created successfully');
 
     return true;
 }
@@ -64,14 +71,23 @@ function showSuccess(elementId, message) {
  * Register a new user
  */
 async function register(email, password) {
+    console.log('register() called with email:', email);
     try {
+        if (!supabase) {
+            throw new Error('Supabase client not initialized');
+        }
+
+        console.log('Calling supabase.auth.signUp...');
         const { data, error } = await supabase.auth.signUp({
             email: email,
             password: password
         });
 
+        console.log('signUp response - data:', data, 'error:', error);
+
         if (error) throw error;
 
+        console.log('Registration successful');
         return { success: true, data };
     } catch (error) {
         console.error('Registration error:', error);
