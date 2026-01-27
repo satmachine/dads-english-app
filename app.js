@@ -1099,7 +1099,7 @@ importFileInput.addEventListener('change', async (e) => {
                     if (audioUrl && audioUrl.startsWith('data:')) {
                         try {
                             const audioBlob = window.authService.dataURLtoBlob(audioUrl);
-                            const cardId = c.id || (Date.now().toString(36) + Math.random().toString(36).slice(2));
+                            const cardId = c.id || crypto.randomUUID();
                             audioUrl = await window.authService.uploadAudio(audioBlob, cardId);
                             console.log(`Uploaded audio for card ${i + 1}/${imported.length}`);
                         } catch (error) {
@@ -1181,7 +1181,7 @@ if (saveCardBtn) {
 
 async function createCard(question, answer, audioData) {
     const maxOrder = cards.reduce((m, c) => Math.max(m, typeof c.order === 'number' ? c.order : -1), -1);
-    const cardId = Date.now().toString(36) + Math.random().toString(36).slice(2);
+    const cardId = crypto.randomUUID();
 
     // Upload audio to Supabase Storage if it's a data URL
     let audioUrl = null;
