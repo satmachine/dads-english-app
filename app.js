@@ -4,6 +4,27 @@
 
 // Initialize Supabase and check authentication on page load
 document.addEventListener('DOMContentLoaded', async () => {
+    console.log('DOMContentLoaded - Starting app initialization');
+
+    // Check if required scripts are loaded
+    if (typeof window.supabase === 'undefined') {
+        alert('Error: Supabase library failed to load. Please check your internet connection.');
+        console.error('Supabase library not loaded');
+        return;
+    }
+
+    if (typeof window.authService === 'undefined') {
+        alert('Error: auth.js failed to load. Please refresh the page.');
+        console.error('authService not found');
+        return;
+    }
+
+    if (typeof window.SUPABASE_CONFIG === 'undefined') {
+        alert('Error: config.js failed to load. Please refresh the page.');
+        console.error('SUPABASE_CONFIG not found');
+        return;
+    }
+
     const authSection = document.getElementById('auth-section');
     const appContainer = document.getElementById('app-container');
     const loginFormContainer = document.getElementById('login-form-container');
@@ -15,18 +36,30 @@ document.addEventListener('DOMContentLoaded', async () => {
     const logoutBtn = document.getElementById('logout-btn');
     const userEmailSpan = document.getElementById('user-email');
 
-    // Initialize Supabase
-    if (!window.authService.initSupabase()) {
-        alert('Error: Supabase is not configured. Please update config.js with your Supabase credentials.');
-        return;
-    }
+    console.log('All DOM elements found');
 
-    // Check if user is already logged in
-    const user = await window.authService.getCurrentUser();
-    if (user) {
-        showApp(user);
-    } else {
+    // Initialize Supabase
+    const supabaseInitialized = window.authService.initSupabase();
+    console.log('Supabase initialized:', supabaseInitialized);
+
+    if (!supabaseInitialized) {
+        console.error('Supabase initialization failed - config not set');
+        // Still continue to set up event handlers so the form works for debugging
         authSection.classList.remove('hidden');
+    } else {
+        // Check if user is already logged in
+        try {
+            const user = await window.authService.getCurrentUser();
+            console.log('Current user:', user ? user.email : 'none');
+            if (user) {
+                showApp(user);
+            } else {
+                authSection.classList.remove('hidden');
+            }
+        } catch (error) {
+            console.error('Error checking current user:', error);
+            authSection.classList.remove('hidden');
+        }
     }
 
     // Switch to register form
@@ -48,62 +81,102 @@ document.addEventListener('DOMContentLoaded', async () => {
 
     // Handle registration
     registerForm.addEventListener('submit', async (e) => {
+        console.log('Register form submitted');
         e.preventDefault();
+
         const email = document.getElementById('register-email').value;
         const password = document.getElementById('register-password').value;
         const confirmPassword = document.getElementById('register-password-confirm').value;
         const errorEl = document.getElementById('register-error');
         const successEl = document.getElementById('register-success');
 
+        console.log('Registration attempt for email:', email);
+
         errorEl.classList.add('hidden');
         successEl.classList.add('hidden');
 
         if (password !== confirmPassword) {
+            console.log('Password mismatch');
             errorEl.textContent = 'Passwords do not match';
             errorEl.classList.remove('hidden');
             return;
         }
 
         if (password.length < 6) {
+            console.log('Password too short');
             errorEl.textContent = 'Password must be at least 6 characters';
             errorEl.classList.remove('hidden');
             return;
         }
 
-        const result = await window.authService.register(email, password);
+        if (!supabaseInitialized) {
+            console.error('Cannot register - Supabase not configured');
+            errorEl.textContent = 'Error: Supabase is not configured. Please update config.js with your Supabase credentials.';
+            errorEl.classList.remove('hidden');
+            return;
+        }
 
-        if (result.success) {
-            successEl.textContent = 'Registration successful! Please check your email to verify your account, then login.';
-            successEl.classList.remove('hidden');
-            registerForm.reset();
+        try {
+            console.log('Calling authService.register...');
+            const result = await window.authService.register(email, password);
+            console.log('Register result:', result);
 
-            // Auto-switch to login after 3 seconds
-            setTimeout(() => {
-                registerFormContainer.classList.add('hidden');
-                loginFormContainer.classList.remove('hidden');
-                successEl.classList.add('hidden');
-            }, 3000);
-        } else {
-            errorEl.textContent = result.error;
+            if (result.success) {
+                successEl.textContent = 'Registration successful! Please check your email to verify your account, then login.';
+                successEl.classList.remove('hidden');
+                registerForm.reset();
+
+                // Auto-switch to login after 3 seconds
+                setTimeout(() => {
+                    registerFormContainer.classList.add('hidden');
+                    loginFormContainer.classList.remove('hidden');
+                    successEl.classList.add('hidden');
+                }, 3000);
+            } else {
+                errorEl.textContent = result.error || 'Registration failed. Please try again.';
+                errorEl.classList.remove('hidden');
+            }
+        } catch (error) {
+            console.error('Registration error:', error);
+            errorEl.textContent = 'An unexpected error occurred: ' + error.message;
             errorEl.classList.remove('hidden');
         }
     });
 
     // Handle login
     loginForm.addEventListener('submit', async (e) => {
+        console.log('Login form submitted');
         e.preventDefault();
+
         const email = document.getElementById('login-email').value;
         const password = document.getElementById('login-password').value;
         const errorEl = document.getElementById('login-error');
 
+        console.log('Login attempt for email:', email);
+
         errorEl.classList.add('hidden');
 
-        const result = await window.authService.login(email, password);
+        if (!supabaseInitialized) {
+            console.error('Cannot login - Supabase not configured');
+            errorEl.textContent = 'Error: Supabase is not configured. Please update config.js with your Supabase credentials.';
+            errorEl.classList.remove('hidden');
+            return;
+        }
 
-        if (result.success) {
-            showApp(result.user);
-        } else {
-            errorEl.textContent = result.error;
+        try {
+            console.log('Calling authService.login...');
+            const result = await window.authService.login(email, password);
+            console.log('Login result:', result);
+
+            if (result.success) {
+                showApp(result.user);
+            } else {
+                errorEl.textContent = result.error || 'Login failed. Please try again.';
+                errorEl.classList.remove('hidden');
+            }
+        } catch (error) {
+            console.error('Login error:', error);
+            errorEl.textContent = 'An unexpected error occurred: ' + error.message;
             errorEl.classList.remove('hidden');
         }
     });
@@ -150,6 +223,8 @@ document.addEventListener('DOMContentLoaded', async () => {
         addSection.classList.add('hidden');
         studySection.classList.remove('hidden');
     }
+
+    console.log('App initialization complete. All event handlers registered.');
 });
 
 // --- Persistence (SUPABASE - replaced IndexedDB) -------------------------------------------------

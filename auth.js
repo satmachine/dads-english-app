@@ -1,14 +1,17 @@
 // Authentication and Supabase Integration
 // This file handles user authentication and replaces IndexedDB with Supabase
 
-// Initialize Supabase client
-let supabase = null;
+// Initialize Supabase client (renamed to avoid conflicts)
+let supabaseClient = null;
 let currentUser = null;
 
 /**
  * Initialize the Supabase client
  */
 function initSupabase() {
+    console.log('initSupabase called');
+    console.log('SUPABASE_CONFIG:', window.SUPABASE_CONFIG);
+
     if (!window.SUPABASE_CONFIG || !window.SUPABASE_CONFIG.url || !window.SUPABASE_CONFIG.anonKey) {
         console.error('Supabase configuration is missing. Please update config.js with your Supabase credentials.');
         return false;
@@ -16,14 +19,18 @@ function initSupabase() {
 
     if (window.SUPABASE_CONFIG.url === 'YOUR_SUPABASE_URL' || window.SUPABASE_CONFIG.anonKey === 'YOUR_SUPABASE_ANON_KEY') {
         console.error('Please update config.js with your actual Supabase credentials.');
+        console.error('Current URL:', window.SUPABASE_CONFIG.url);
+        console.error('Current key:', window.SUPABASE_CONFIG.anonKey.substring(0, 20) + '...');
         showError('login-error', 'Supabase is not configured. Please check config.js');
         return false;
     }
 
-    supabase = window.supabase.createClient(
+    console.log('Creating Supabase client with URL:', window.SUPABASE_CONFIG.url);
+    supabaseClient = window.supabase.createClient(
         window.SUPABASE_CONFIG.url,
         window.SUPABASE_CONFIG.anonKey
     );
+    console.log('Supabase client created successfully');
 
     return true;
 }
@@ -64,14 +71,23 @@ function showSuccess(elementId, message) {
  * Register a new user
  */
 async function register(email, password) {
+    console.log('register() called with email:', email);
     try {
-        const { data, error } = await supabase.auth.signUp({
+        if (!supabaseClient) {
+            throw new Error('Supabase client not initialized');
+        }
+
+        console.log('Calling supabaseClient.auth.signUp...');
+        const { data, error } = await supabaseClient.auth.signUp({
             email: email,
             password: password
         });
 
+        console.log('signUp response - data:', data, 'error:', error);
+
         if (error) throw error;
 
+        console.log('Registration successful');
         return { success: true, data };
     } catch (error) {
         console.error('Registration error:', error);
@@ -84,7 +100,7 @@ async function register(email, password) {
  */
 async function login(email, password) {
     try {
-        const { data, error } = await supabase.auth.signInWithPassword({
+        const { data, error } = await supabaseClient.auth.signInWithPassword({
             email: email,
             password: password
         });
@@ -104,7 +120,7 @@ async function login(email, password) {
  */
 async function logout() {
     try {
-        const { error } = await supabase.auth.signOut();
+        const { error } = await supabaseClient.auth.signOut();
         if (error) throw error;
 
         currentUser = null;
@@ -120,7 +136,7 @@ async function logout() {
  */
 async function getCurrentUser() {
     try {
-        const { data: { user } } = await supabase.auth.getUser();
+        const { data: { user } } = await supabaseClient.auth.getUser();
         currentUser = user;
         return user;
     } catch (error) {
@@ -150,7 +166,7 @@ async function loadCards() {
             return [];
         }
 
-        const { data, error } = await supabase
+        const { data, error } = await supabaseClient
             .from('cards')
             .select('*')
             .eq('user_id', currentUser.id)
@@ -192,7 +208,7 @@ async function saveCards(cards) {
         }
 
         // Delete all existing cards for this user
-        const { error: deleteError } = await supabase
+        const { error: deleteError } = await supabaseClient
             .from('cards')
             .delete()
             .eq('user_id', currentUser.id);
@@ -215,7 +231,7 @@ async function saveCards(cards) {
                 order_index: card.order || 0
             }));
 
-            const { error: insertError } = await supabase
+            const { error: insertError } = await supabaseClient
                 .from('cards')
                 .insert(cardsToInsert);
 
@@ -251,7 +267,7 @@ async function saveCard(card) {
             order_index: card.order || 0
         };
 
-        const { data, error } = await supabase
+        const { data, error } = await supabaseClient
             .from('cards')
             .upsert(cardData)
             .select();
@@ -275,7 +291,7 @@ async function deleteCardFromDB(cardId) {
             return { success: false, error: 'Not logged in' };
         }
 
-        const { error } = await supabase
+        const { error } = await supabaseClient
             .from('cards')
             .delete()
             .eq('id', cardId)
@@ -306,7 +322,7 @@ async function uploadAudio(audioBlob, cardId) {
 
         const fileName = `${currentUser.id}/${cardId}.mp3`;
 
-        const { data, error } = await supabase.storage
+        const { data, error } = await supabaseClient.storage
             .from('audio-files')
             .upload(fileName, audioBlob, {
                 cacheControl: '3600',
@@ -316,7 +332,7 @@ async function uploadAudio(audioBlob, cardId) {
         if (error) throw error;
 
         // Get public URL
-        const { data: urlData } = supabase.storage
+        const { data: urlData } = supabaseClient.storage
             .from('audio-files')
             .getPublicUrl(fileName);
 
@@ -339,7 +355,7 @@ async function deleteAudio(audioUrl) {
         const urlParts = audioUrl.split('/');
         const fileName = `${currentUser.id}/${urlParts[urlParts.length - 1]}`;
 
-        const { error } = await supabase.storage
+        const { error } = await supabaseClient.storage
             .from('audio-files')
             .remove([fileName]);
 
@@ -376,7 +392,7 @@ async function saveUserAPIKey(apiKey) {
     try {
         if (!currentUser) return { success: false };
 
-        const { data, error } = await supabase
+        const { data, error } = await supabaseClient
             .from('user_settings')
             .upsert({
                 id: currentUser.id,
@@ -399,7 +415,7 @@ async function getUserAPIKey() {
     try {
         if (!currentUser) return null;
 
-        const { data, error } = await supabase
+        const { data, error } = await supabaseClient
             .from('user_settings')
             .select('openai_api_key')
             .eq('id', currentUser.id)
