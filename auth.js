@@ -81,9 +81,16 @@ async function register(email, password) {
         }
 
         console.log('Calling supabaseClient.auth.signUp...');
+        // Use current page URL as the redirect so the confirmation email
+        // links back to wherever the app is actually hosted (not localhost)
+        const redirectUrl = window.location.origin + window.location.pathname;
+        console.log('Email redirect URL:', redirectUrl);
         const { data, error } = await supabaseClient.auth.signUp({
             email: email,
-            password: password
+            password: password,
+            options: {
+                emailRedirectTo: redirectUrl
+            }
         });
 
         console.log('signUp response - data:', data, 'error:', error);
