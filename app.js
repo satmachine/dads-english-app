@@ -1089,26 +1089,28 @@ importFileInput.addEventListener('change', async (e) => {
                 alert('Importing cards... This may take a moment if there are audio files to upload.');
 
                 // Process cards and upload audio if needed
+                const UUID_RE = /^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/i;
                 const processedCards = [];
                 for (let i = 0; i < imported.length; i++) {
                     const c = imported[i];
+                    const cardId = (c.id && UUID_RE.test(c.id)) ? c.id : crypto.randomUUID();
                     let audioUrl = c.audioData;
 
                     // If audio is a base64 data URL, upload to Supabase Storage
                     if (audioUrl && audioUrl.startsWith('data:')) {
                         try {
                             const audioBlob = window.authService.dataURLtoBlob(audioUrl);
-                            const cardId = c.id || crypto.randomUUID();
                             audioUrl = await window.authService.uploadAudio(audioBlob, cardId);
                             console.log(`Uploaded audio for card ${i + 1}/${imported.length}`);
                         } catch (error) {
-                            console.error('Error uploading audio for card:', c.id, error);
+                            console.error('Error uploading audio for card:', cardId, error);
                             // Keep the data URL if upload fails
                         }
                     }
 
                     processedCards.push({
                         ...c,
+                        id: cardId,
                         audioData: audioUrl,
                         pinned: !!c.pinned,
                         order: typeof c.order === 'number' ? c.order : i
