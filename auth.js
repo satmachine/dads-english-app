@@ -1,9 +1,12 @@
 // Authentication and Supabase Integration
 // This file handles user authentication and replaces IndexedDB with Supabase
 
-// Initialize Supabase client (renamed to avoid conflicts)
-let supabaseClient = null;
-let currentUser = null;
+(function() {
+"use strict";
+
+// Initialize Supabase client (inside IIFE to avoid global scope conflicts)
+var supabaseClient = null;
+var currentUser = null;
 
 /**
  * Initialize the Supabase client
@@ -450,3 +453,5 @@ window.authService = {
     get currentUser() { return currentUser; },
     set currentUser(user) { currentUser = user; }
 };
+
+})(); // end IIFE

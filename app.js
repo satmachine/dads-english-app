@@ -6,25 +6,6 @@
 document.addEventListener('DOMContentLoaded', async () => {
     console.log('DOMContentLoaded - Starting app initialization');
 
-    // Check if required scripts are loaded
-    if (typeof window.supabase === 'undefined') {
-        alert('Error: Supabase library failed to load. Please check your internet connection.');
-        console.error('Supabase library not loaded');
-        return;
-    }
-
-    if (typeof window.authService === 'undefined') {
-        alert('Error: auth.js failed to load. Please refresh the page.');
-        console.error('authService not found');
-        return;
-    }
-
-    if (typeof window.SUPABASE_CONFIG === 'undefined') {
-        alert('Error: config.js failed to load. Please refresh the page.');
-        console.error('SUPABASE_CONFIG not found');
-        return;
-    }
-
     const authSection = document.getElementById('auth-section');
     const appContainer = document.getElementById('app-container');
     const loginFormContainer = document.getElementById('login-form-container');
@@ -36,7 +17,43 @@ document.addEventListener('DOMContentLoaded', async () => {
     const logoutBtn = document.getElementById('logout-btn');
     const userEmailSpan = document.getElementById('user-email');
 
-    console.log('All DOM elements found');
+    // Set up login/register toggle handlers FIRST so they always work
+    // even if Supabase or authService fails to load
+    showRegisterLink.addEventListener('click', (e) => {
+        e.preventDefault();
+        loginFormContainer.classList.add('hidden');
+        registerFormContainer.classList.remove('hidden');
+        document.getElementById('login-error').classList.add('hidden');
+    });
+
+    showLoginLink.addEventListener('click', (e) => {
+        e.preventDefault();
+        registerFormContainer.classList.add('hidden');
+        loginFormContainer.classList.remove('hidden');
+        document.getElementById('register-error').classList.add('hidden');
+        document.getElementById('register-success').classList.add('hidden');
+    });
+
+    // Check if required scripts are loaded
+    if (typeof window.supabase === 'undefined') {
+        console.error('Supabase library not loaded');
+        authSection.classList.remove('hidden');
+        return;
+    }
+
+    if (typeof window.authService === 'undefined') {
+        console.error('authService not found - auth.js may have failed to load');
+        authSection.classList.remove('hidden');
+        return;
+    }
+
+    if (typeof window.SUPABASE_CONFIG === 'undefined') {
+        console.error('SUPABASE_CONFIG not found - config.js may have failed to load');
+        authSection.classList.remove('hidden');
+        return;
+    }
+
+    console.log('All required scripts loaded');
 
     // Initialize Supabase
     const supabaseInitialized = window.authService.initSupabase();
@@ -61,23 +78,6 @@ document.addEventListener('DOMContentLoaded', async () => {
             authSection.classList.remove('hidden');
         }
     }
-
-    // Switch to register form
-    showRegisterLink.addEventListener('click', (e) => {
-        e.preventDefault();
-        loginFormContainer.classList.add('hidden');
-        registerFormContainer.classList.remove('hidden');
-        document.getElementById('login-error').classList.add('hidden');
-    });
-
-    // Switch to login form
-    showLoginLink.addEventListener('click', (e) => {
-        e.preventDefault();
-        registerFormContainer.classList.add('hidden');
-        loginFormContainer.classList.remove('hidden');
-        document.getElementById('register-error').classList.add('hidden');
-        document.getElementById('register-success').classList.add('hidden');
-    });
 
     // Handle registration
     registerForm.addEventListener('submit', async (e) => {
