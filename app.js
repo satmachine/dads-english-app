@@ -194,7 +194,6 @@ document.addEventListener('DOMContentLoaded', async () => {
     async function initApp() {
         cards = await window.authService.loadCards();
         normalizeOrders();
-        await window.authService.saveCards(cards); // Ensure normalized orders are saved
 
         renderCardList();
         renderReviewList();
@@ -1090,26 +1089,28 @@ importFileInput.addEventListener('change', async (e) => {
                 alert('Importing cards... This may take a moment if there are audio files to upload.');
 
                 // Process cards and upload audio if needed
+                const UUID_RE = /^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/i;
                 const processedCards = [];
                 for (let i = 0; i < imported.length; i++) {
                     const c = imported[i];
+                    const cardId = (c.id && UUID_RE.test(c.id)) ? c.id : crypto.randomUUID();
                     let audioUrl = c.audioData;
 
                     // If audio is a base64 data URL, upload to Supabase Storage
                     if (audioUrl && audioUrl.startsWith('data:')) {
                         try {
                             const audioBlob = window.authService.dataURLtoBlob(audioUrl);
-                            const cardId = c.id || (Date.now().toString(36) + Math.random().toString(36).slice(2));
                             audioUrl = await window.authService.uploadAudio(audioBlob, cardId);
                             console.log(`Uploaded audio for card ${i + 1}/${imported.length}`);
                         } catch (error) {
-                            console.error('Error uploading audio for card:', c.id, error);
+                            console.error('Error uploading audio for card:', cardId, error);
                             // Keep the data URL if upload fails
                         }
                     }
 
                     processedCards.push({
                         ...c,
+                        id: cardId,
                         audioData: audioUrl,
                         pinned: !!c.pinned,
                         order: typeof c.order === 'number' ? c.order : i
@@ -1181,7 +1182,7 @@ if (saveCardBtn) {
 
 async function createCard(question, answer, audioData) {
     const maxOrder = cards.reduce((m, c) => Math.max(m, typeof c.order === 'number' ? c.order : -1), -1);
-    const cardId = Date.now().toString(36) + Math.random().toString(36).slice(2);
+    const cardId = crypto.randomUUID();
 
     // Upload audio to Supabase Storage if it's a data URL
     let audioUrl = null;
