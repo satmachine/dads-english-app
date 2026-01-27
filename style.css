@@ -50,7 +50,7 @@ main section {
 }
 
 .hidden {
-    display: none;
+    display: none !important;
 }
 
 
@@ -297,7 +297,7 @@ audio::-webkit-media-controls-current-time-display {
 }
 
 button.hidden {
-    display: none;
+    display: none !important;
 }
 
 /* Secondary action buttons */
