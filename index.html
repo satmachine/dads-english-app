@@ -75,57 +75,10 @@
         <nav>
             <button id="nav-study">Test</button>
             <button id="nav-review">Study</button>
-            <button id="nav-add">Add Cards</button>
         </nav>
     </header>
 
     <main>
-        <!-- Add card section -->
-        <section id="add-section" class="hidden">
-            <h2>Add / Edit Card</h2>
-            <form id="card-form">
-                <!-- AI-assisted card creation -->
-                <fieldset class="ai-tools">
-                    <label>
-                        Prompt / topic for the sentence<br />
-                        <textarea id="prompt"></textarea>
-                    </label>
-                    <button type="button" id="generate-sentence-btn" class="secondary-btn">Generate Paragraph</button>
-                    <small id="gen-sentence-status" class="hidden"></small>
-
-                    <hr />
-
-                    <label>
-                        English paragraph<br />
-                        <textarea id="question" required></textarea>
-                    </label>
-                    <button type="button" id="generate-paragraph-voice-btn" class="secondary-btn">Generate Voice</button>
-                    <small id="gen-paragraph-voice-status" class="hidden"></small>
-                    <button type="button" id="generate-paragraph-translation-btn" class="secondary-btn">Generate Translation</button>
-                    <small id="gen-paragraph-translation-status" class="hidden"></small>
-                </fieldset>
-
-                <label>
-                    Traditional Chinese translation (you can edit afterwards)<br />
-                    <textarea id="answer" required></textarea>
-                </label>
-
-                <div class="inline-audio-tools">
-                    <label>
-                        Optional audio file
-                        <input type="file" id="audio" accept="audio/*" />
-                    </label>
-                </div>
-
-                <button type="button" id="save-card-btn" class="primary-btn">Save Card</button>
-                <button type="button" id="cancel-edit-btn" class="hidden">Cancel</button>
-                <small id="save-status" class="hidden"></small>
-            </form>
-            <h3>Your Cards</h3>
-            <ul id="card-list"></ul>
-            <p class="note">Cards are stored in the cloud and synced across all your devices.</p>
-        </section>
-        <!-- Study section -->
         <section id="review-section" class="hidden">
             <h2>Study Cards</h2>
             <ul id="review-list"></ul>

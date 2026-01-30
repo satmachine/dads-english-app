@@ -1,0 +1,9 @@
+{
+  "name": "dads-english-app-scripts",
+  "version": "1.0.0",
+  "type": "module",
+  "description": "Helper scripts for Dad's English App",
+  "scripts": {
+    "generate": "node generate-cards.mjs"
+  }
+}

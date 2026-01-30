@@ -1,5 +1,5 @@
 // Authentication and Supabase Integration
-// This file handles user authentication and replaces IndexedDB with Supabase
+// Cards are loaded from GitHub, only progress is stored in Supabase
 
 (function() {
 "use strict";
@@ -7,6 +7,9 @@
 // Initialize Supabase client (inside IIFE to avoid global scope conflicts)
 var supabaseClient = null;
 var currentUser = null;
+
+// Cache for cards loaded from GitHub
+var cachedCards = null;
 
 /**
  * Initialize the Supabase client
@@ -81,8 +84,6 @@ async function register(email, password) {
         }
 
         console.log('Calling supabaseClient.auth.signUp...');
-        // Use current page URL as the redirect so the confirmation email
-        // links back to wherever the app is actually hosted (not localhost)
         const redirectUrl = window.location.origin + window.location.pathname;
         console.log('Email redirect URL:', redirectUrl);
         const { data, error } = await supabaseClient.auth.signUp({
@@ -134,6 +135,7 @@ async function logout() {
         if (error) throw error;
 
         currentUser = null;
+        cachedCards = null;
         return { success: true };
     } catch (error) {
         console.error('Logout error:', error);
@@ -166,8 +168,77 @@ async function isAuthenticated() {
 // ==================== CARD OPERATIONS ====================
 
 /**
- * Load all cards for the current user from Supabase
- * Replaces the old IndexedDB loadCards() function
+ * Build the audio URL for a card based on its audioFile field
+ */
+function getAudioUrl(audioFile) {
+    if (!audioFile) return null;
+    const config = window.SUPABASE_CONFIG;
+    // Use configured content base URL or default to relative path
+    const baseUrl = config.contentBaseUrl || './content/audio/';
+    return baseUrl + audioFile;
+}
+
+/**
+ * Fetch cards from GitHub (content/cards.json)
+ */
+async function fetchCardsFromGitHub() {
+    try {
+        const config = window.SUPABASE_CONFIG;
+        const cardsUrl = config.cardsJsonUrl || './content/cards.json';
+
+        const response = await fetch(cardsUrl, {
+            cache: 'no-store' // Always get fresh content
+        });
+
+        if (!response.ok) {
+            throw new Error(`Failed to fetch cards: ${response.status}`);
+        }
+
+        const data = await response.json();
+        return data.cards || [];
+    } catch (error) {
+        console.error('Error fetching cards from GitHub:', error);
+        return [];
+    }
+}
+
+/**
+ * Fetch progress from Supabase for the current user
+ */
+async function fetchProgressFromSupabase() {
+    try {
+        if (!currentUser) {
+            console.error('No user logged in');
+            return {};
+        }
+
+        const { data, error } = await supabaseClient
+            .from('card_progress')
+            .select('*')
+            .eq('user_id', currentUser.id);
+
+        if (error) throw error;
+
+        // Convert array to map by card_id
+        const progressMap = {};
+        (data || []).forEach(p => {
+            progressMap[p.card_id] = {
+                interval: p.interval || 0,
+                repetitions: p.repetitions || 0,
+                easeFactor: parseFloat(p.ease_factor) || 2.5,
+                nextReview: p.next_review || Date.now()
+            };
+        });
+
+        return progressMap;
+    } catch (error) {
+        console.error('Error fetching progress:', error);
+        return {};
+    }
+}
+
+/**
+ * Load all cards - fetches content from GitHub and merges with progress from Supabase
  */
 async function loadCards() {
     try {
@@ -176,39 +247,40 @@ async function loadCards() {
             return [];
         }
 
-        const { data, error } = await supabaseClient
-            .from('cards')
-            .select('*')
-            .eq('user_id', currentUser.id)
-            .order('order_index', { ascending: true });
+        // Fetch cards from GitHub and progress from Supabase in parallel
+        const [githubCards, progressMap] = await Promise.all([
+            fetchCardsFromGitHub(),
+            fetchProgressFromSupabase()
+        ]);
 
-        if (error) throw error;
+        // Merge cards with progress
+        const cards = githubCards.map((card, index) => {
+            const progress = progressMap[card.id] || {};
+            return {
+                id: card.id,
+                question: card.question,
+                answer: card.answer,
+                audioData: getAudioUrl(card.audioFile),
+                interval: progress.interval || 0,
+                repetitions: progress.repetitions || 0,
+                easeFactor: progress.easeFactor || 2.5,
+                nextReview: progress.nextReview || Date.now(),
+                pinned: false,
+                order: index
+            };
+        });
 
-        // Transform from Supabase format to app format
-        const cards = (data || []).map(card => ({
-            id: card.id,
-            question: card.question,
-            answer: card.answer,
-            audioData: card.audio_url, // Changed from audioData to audio_url
-            interval: card.interval || 0,
-            repetitions: card.repetitions || 0,
-            easeFactor: parseFloat(card.ease_factor) || 2.5,
-            nextReview: card.next_review || Date.now(),
-            pinned: card.pinned || false,
-            order: card.order_index || 0
-        }));
-
+        cachedCards = cards;
         return cards;
     } catch (error) {
         console.error('Error loading cards:', error);
-        alert('Failed to load cards from cloud: ' + error.message);
+        alert('Failed to load cards: ' + error.message);
         return [];
     }
 }
 
 /**
- * Save all cards to Supabase
- * Replaces the old IndexedDB saveCards() function
+ * Save progress to Supabase (only saves spaced repetition data, not card content)
  */
 async function saveCards(cards) {
     try {
@@ -217,98 +289,39 @@ async function saveCards(cards) {
             return;
         }
 
-        // Fetch existing card IDs so we can detect deletions
-        const { data: existingCards, error: fetchError } = await supabaseClient
-            .from('cards')
-            .select('id')
-            .eq('user_id', currentUser.id);
-
-        if (fetchError) throw fetchError;
-
-        // Upsert all current cards (safe: creates or updates, never deletes)
-        if (cards.length > 0) {
-            const cardsToUpsert = cards.map(card => ({
-                id: card.id,
+        // Only save progress data for cards that have been reviewed
+        const progressToSave = cards
+            .filter(card => card.repetitions > 0 || card.nextReview !== Date.now())
+            .map(card => ({
+                card_id: card.id,
                 user_id: currentUser.id,
-                question: card.question,
-                answer: card.answer,
-                audio_url: card.audioData,
                 interval: card.interval || 0,
                 repetitions: card.repetitions || 0,
                 ease_factor: card.easeFactor || 2.5,
-                next_review: card.nextReview || Date.now(),
-                pinned: card.pinned || false,
-                order_index: card.order || 0
+                next_review: card.nextReview || Date.now()
             }));
 
-            const { error: upsertError } = await supabaseClient
-                .from('cards')
-                .upsert(cardsToUpsert);
+        if (progressToSave.length > 0) {
+            const { error } = await supabaseClient
+                .from('card_progress')
+                .upsert(progressToSave, {
+                    onConflict: 'card_id,user_id'
+                });
 
-            if (upsertError) throw upsertError;
+            if (error) throw error;
         }
 
-        // Only delete cards the user explicitly removed (exist in DB but not locally)
-        if (existingCards && existingCards.length > 0) {
-            const localIds = new Set(cards.map(c => c.id));
-            const toDelete = existingCards.filter(c => !localIds.has(c.id)).map(c => c.id);
-            if (toDelete.length > 0) {
-                const { error: deleteError } = await supabaseClient
-                    .from('cards')
-                    .delete()
-                    .in('id', toDelete);
-
-                if (deleteError) throw deleteError;
-            }
-        }
+        cachedCards = cards;
     } catch (error) {
-        console.error('Error saving cards:', error);
-        alert('Failed to save cards to cloud: ' + error.message);
+        console.error('Error saving progress:', error);
+        alert('Failed to save progress: ' + error.message);
     }
 }
 
 /**
- * Save a single card to Supabase (upsert)
+ * Save progress for a single card
  */
-async function saveCard(card) {
-    try {
-        if (!currentUser) {
-            console.error('No user logged in');
-            return { success: false, error: 'Not logged in' };
-        }
-
-        const cardData = {
-            id: card.id,
-            user_id: currentUser.id,
-            question: card.question,
-            answer: card.answer,
-            audio_url: card.audioData || null,
-            interval: card.interval || 0,
-            repetitions: card.repetitions || 0,
-            ease_factor: card.easeFactor || 2.5,
-            next_review: card.nextReview || Date.now(),
-            pinned: card.pinned || false,
-            order_index: card.order || 0
-        };
-
-        const { data, error } = await supabaseClient
-            .from('cards')
-            .upsert(cardData)
-            .select();
-
-        if (error) throw error;
-
-        return { success: true, data: data[0] };
-    } catch (error) {
-        console.error('Error saving card:', error);
-        return { success: false, error: error.message };
-    }
-}
-
-/**
- * Delete a card from Supabase
- */
-async function deleteCardFromDB(cardId) {
+async function saveCardProgress(card) {
     try {
         if (!currentUser) {
             console.error('No user logged in');
@@ -316,95 +329,25 @@ async function deleteCardFromDB(cardId) {
         }
 
         const { error } = await supabaseClient
-            .from('cards')
-            .delete()
-            .eq('id', cardId)
-            .eq('user_id', currentUser.id);
+            .from('card_progress')
+            .upsert({
+                card_id: card.id,
+                user_id: currentUser.id,
+                interval: card.interval || 0,
+                repetitions: card.repetitions || 0,
+                ease_factor: card.easeFactor || 2.5,
+                next_review: card.nextReview || Date.now()
+            }, {
+                onConflict: 'card_id,user_id'
+            });
 
         if (error) throw error;
 
         return { success: true };
     } catch (error) {
-        console.error('Error deleting card:', error);
+        console.error('Error saving card progress:', error);
         return { success: false, error: error.message };
     }
-}
-
-// ==================== AUDIO STORAGE ====================
-
-/**
- * Upload audio file to Supabase Storage
- * @param {Blob} audioBlob - The audio blob to upload
- * @param {string} cardId - The card ID for naming the file
- * @returns {Promise<string>} - The public URL of the uploaded audio
- */
-async function uploadAudio(audioBlob, cardId) {
-    try {
-        if (!currentUser) {
-            throw new Error('No user logged in');
-        }
-
-        const fileName = `${currentUser.id}/${cardId}.mp3`;
-
-        const { data, error } = await supabaseClient.storage
-            .from('audio-files')
-            .upload(fileName, audioBlob, {
-                cacheControl: '3600',
-                upsert: true // Replace if exists
-            });
-
-        if (error) throw error;
-
-        // Get public URL
-        const { data: urlData } = supabaseClient.storage
-            .from('audio-files')
-            .getPublicUrl(fileName);
-
-        return urlData.publicUrl;
-    } catch (error) {
-        console.error('Error uploading audio:', error);
-        throw error;
-    }
-}
-
-/**
- * Delete audio file from Supabase Storage
- * @param {string} audioUrl - The URL of the audio to delete
- */
-async function deleteAudio(audioUrl) {
-    try {
-        if (!currentUser || !audioUrl) return;
-
-        // Extract file path from URL
-        const urlParts = audioUrl.split('/');
-        const fileName = `${currentUser.id}/${urlParts[urlParts.length - 1]}`;
-
-        const { error } = await supabaseClient.storage
-            .from('audio-files')
-            .remove([fileName]);
-
-        if (error) throw error;
-    } catch (error) {
-        console.error('Error deleting audio:', error);
-    }
-}
-
-/**
- * Convert data URL to Blob
- */
-function dataURLtoBlob(dataURL) {
-    const parts = dataURL.split(',');
-    const byteString = atob(parts[1]);
-    const mimeString = parts[0].split(':')[1].split(';')[0];
-
-    const ab = new ArrayBuffer(byteString.length);
-    const ia = new Uint8Array(ab);
-
-    for (let i = 0; i < byteString.length; i++) {
-        ia[i] = byteString.charCodeAt(i);
-    }
-
-    return new Blob([ab], { type: mimeString });
 }
 
 // ==================== USER SETTINGS ====================
@@ -464,11 +407,7 @@ window.authService = {
     isAuthenticated,
     loadCards,
     saveCards,
-    saveCard,
-    deleteCardFromDB,
-    uploadAudio,
-    deleteAudio,
-    dataURLtoBlob,
+    saveCardProgress,
     saveUserAPIKey,
     getUserAPIKey,
     get currentUser() { return currentUser; },
