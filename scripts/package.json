@@ -4,6 +4,8 @@
   "type": "module",
   "description": "Helper scripts for Dad's English App",
   "scripts": {
-    "generate": "node generate-cards.mjs"
+    "generate": "node generate-cards.mjs",
+    "translate": "node translate-cards.mjs",
+    "translate:dry-run": "node translate-cards.mjs --dry-run"
   }
 }
