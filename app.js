@@ -325,7 +325,7 @@ function setupAudioLooping() {
     cardAudio.onended = () => {
         audioLoopTimeout = setTimeout(() => {
             cardAudio.currentTime = 0;
-            cardAudio.play().catch(() => {});
+            cardAudio.play().catch(() => { });
         }, 5000);
     };
 }
@@ -344,25 +344,81 @@ function renderReviewList() {
         return;
     }
 
-    cards.forEach(card => {
-        const li = document.createElement("li");
-        const textSpan = document.createElement("span");
-        textSpan.textContent = card.question.length > 60 ? card.question.slice(0,60) + "…" : card.question;
-        li.appendChild(textSpan);
-        li.addEventListener("click", () => openReviewCard(card.id));
-        reviewList.appendChild(li);
+    // Sort cards alphabetically by title for display
+    const sortedCards = [...cards].sort((a, b) => {
+        const titleA = (a.title || a.id).toLowerCase();
+        const titleB = (b.title || b.id).toLowerCase();
+        return titleA.localeCompare(titleB);
     });
 
-    reviewPlaybackOrder = cards.map(card => card.id);
+    // Group cards by first letter
+    const grouped = {};
+    sortedCards.forEach(card => {
+        const title = card.title || card.id;
+        const firstLetter = title.charAt(0).toUpperCase();
+        if (!grouped[firstLetter]) {
+            grouped[firstLetter] = [];
+        }
+        grouped[firstLetter].push(card);
+    });
+
+    // Get sorted list of letters
+    const letters = Object.keys(grouped).sort();
+
+    // Create cluster grid container
+    const clusterGrid = document.createElement("div");
+    clusterGrid.className = "cluster-grid";
+
+    letters.forEach(letter => {
+        // Create cluster container
+        const cluster = document.createElement("div");
+        cluster.className = "letter-cluster";
+
+        // Letter heading
+        const heading = document.createElement("div");
+        heading.className = "cluster-heading";
+        heading.textContent = letter;
+        cluster.appendChild(heading);
+
+        // Cards list for this letter
+        const cardList = document.createElement("ul");
+        cardList.className = "cluster-cards";
+
+        grouped[letter].forEach(card => {
+            const li = document.createElement("li");
+            li.textContent = card.title || card.id;
+            li.addEventListener("click", () => openReviewCard(card.id));
+            cardList.appendChild(li);
+        });
+
+        cluster.appendChild(cardList);
+        clusterGrid.appendChild(cluster);
+    });
+
+    reviewList.appendChild(clusterGrid);
+
+    // Use sorted order for playback
+    reviewPlaybackOrder = sortedCards.map(card => card.id);
     if (currentReviewCard) {
         reviewPlaybackIndex = reviewPlaybackOrder.indexOf(currentReviewCard.id);
     }
 }
 
 function openReviewCard(id) {
+    // Stop any currently playing audio first (prevents multiple tracks)
+    stopAudio();
+    stopReviewAudio();
+
     const card = cards.find(c => c.id === id);
     if (!card) return;
-    reviewPlaybackOrder = cards.map(c => c.id);
+
+    // Use sorted order for playback
+    const sortedCards = [...cards].sort((a, b) => {
+        const titleA = (a.title || a.id).toLowerCase();
+        const titleB = (b.title || b.id).toLowerCase();
+        return titleA.localeCompare(titleB);
+    });
+    reviewPlaybackOrder = sortedCards.map(c => c.id);
     reviewPlaybackIndex = reviewPlaybackOrder.indexOf(card.id);
     if (reviewPlaybackIndex === -1 && reviewPlaybackOrder.length > 0) {
         reviewPlaybackIndex = 0;
@@ -370,7 +426,6 @@ function openReviewCard(id) {
     currentReviewCard = card;
     reviewRevealArea.classList.add("hidden");
     reviewShowAnswerBtn.classList.remove("hidden");
-    stopReviewAudio();
     reviewCardQuestionEl.textContent = card.question;
     reviewCardAnswerEl.textContent = card.answer;
     if (card.audioData) {
@@ -378,7 +433,7 @@ function openReviewCard(id) {
         reviewAudio.load();
         reviewAudio.playbackRate = fastPlayback ? 1.2 : 1;
         setupReviewAutoAdvance();
-        reviewAudio.play().catch(() => {});
+        reviewAudio.play().catch(() => { });
         reviewAudioToggleBtn.classList.remove("hidden");
         reviewRewindBtn.classList.remove("hidden");
         reviewRestartBtn.classList.remove("hidden");
@@ -403,6 +458,9 @@ function revealReviewAnswer() {
 // ==================== NAVIGATION ====================
 
 navStudy.addEventListener('click', () => {
+    // Stop all audio when switching to Test section
+    stopAudio();
+    stopReviewAudio();
     startStudy();
     reviewSection.classList.add("hidden");
     studySection.classList.remove('hidden');
@@ -470,7 +528,7 @@ function showNextCard() {
         cardAudio.load();
         cardAudio.playbackRate = fastPlayback ? 1.2 : 1;
         setupAudioLooping();
-        cardAudio.play().catch(() => {});
+        cardAudio.play().catch(() => { });
         if (audioToggleBtn) {
             audioToggleBtn.classList.remove('hidden');
             audioToggleBtn.textContent = '▶️';
@@ -507,7 +565,7 @@ if (audioToggleBtn) {
     audioToggleBtn.addEventListener('click', () => {
         if (cardAudio.paused) {
             setupAudioLooping();
-            cardAudio.play().catch(() => {});
+            cardAudio.play().catch(() => { });
         } else {
             clearTimeout(audioLoopTimeout);
             audioLoopTimeout = null;
@@ -534,7 +592,7 @@ if (restartBtn) {
         if (!cardAudio.duration) return;
         cardAudio.currentTime = 0;
         if (!cardAudio.paused) {
-            cardAudio.play().catch(() => {});
+            cardAudio.play().catch(() => { });
         }
     });
 }
@@ -568,7 +626,7 @@ if (reviewAudioToggleBtn) {
             clearTimeout(reviewAudioAdvanceTimeout);
             reviewAudioAdvanceTimeout = null;
             setupReviewAutoAdvance();
-            reviewAudio.play().catch(() => {});
+            reviewAudio.play().catch(() => { });
         } else {
             clearTimeout(reviewAudioAdvanceTimeout);
             reviewAudioAdvanceTimeout = null;
@@ -601,7 +659,7 @@ if (reviewRestartBtn) {
         reviewAudioAdvanceTimeout = null;
         reviewAudio.currentTime = 0;
         if (!reviewAudio.paused) {
-            reviewAudio.play().catch(() => {});
+            reviewAudio.play().catch(() => { });
         }
     });
 }

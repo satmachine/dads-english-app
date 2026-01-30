@@ -21,7 +21,8 @@ nav {
 
 nav button {
     margin-right: 0.6rem;
-    padding: 0.6rem 1.4rem; /* larger touch target on tablets */
+    padding: 0.6rem 1.4rem;
+    /* larger touch target on tablets */
     border: none;
     background: #224abe;
     color: white;
@@ -49,6 +50,11 @@ main section {
     margin: 0 auto;
 }
 
+/* Allow review section to be wider for multi-column layout */
+#review-section {
+    max-width: 1200px;
+}
+
 .hidden {
     display: none !important;
 }
@@ -64,8 +70,10 @@ main section {
 
 .rating-buttons button {
     margin: 0;
-    padding: 0.9rem 1.6rem; /* larger touch target */
-    font-size: 1.2rem;      /* iPad friendly text */
+    padding: 0.9rem 1.6rem;
+    /* larger touch target */
+    font-size: 1.2rem;
+    /* iPad friendly text */
     border: none;
     border-radius: 8px;
     cursor: pointer;
@@ -146,7 +154,58 @@ textarea {
     padding: 0;
 }
 
-#review-list li {
+/* Cluster Grid Layout */
+.cluster-grid {
+    display: grid;
+    grid-template-columns: repeat(auto-fill, minmax(200px, 1fr));
+    gap: 1.5rem;
+    padding: 0.5rem 0;
+}
+
+.letter-cluster {
+    background: #fff;
+    border-radius: 10px;
+    box-shadow: 0 2px 8px rgba(0, 0, 0, 0.08);
+    overflow: hidden;
+}
+
+.cluster-heading {
+    background: linear-gradient(135deg, #4e73df 0%, #667eea 100%);
+    color: white;
+    font-size: 1.5rem;
+    font-weight: bold;
+    padding: 0.6rem 1rem;
+    text-align: center;
+}
+
+.cluster-cards {
+    list-style: none;
+    padding: 0;
+    margin: 0;
+}
+
+.cluster-cards li {
+    padding: 0.7rem 1rem;
+    border-bottom: 1px solid #eee;
+    cursor: pointer;
+    transition: background 0.15s ease;
+    font-size: 0.95rem;
+}
+
+.cluster-cards li:last-child {
+    border-bottom: none;
+}
+
+.cluster-cards li:hover {
+    background: #f0f4ff;
+}
+
+.cluster-cards li:active {
+    background: #e0e8ff;
+}
+
+/* Legacy #review-list li styles (kept for backward compatibility) */
+#review-list>li {
     background: #fff;
     margin: 0.3rem 0;
     padding: 0.6rem;
@@ -214,9 +273,11 @@ textarea {
     border-radius: 6px;
     cursor: pointer;
 }
+
 #review-show-answer:hover {
     background: #3753b4;
 }
+
 #cancel-edit-btn {
     margin-left: 0.5rem;
     padding: 0.4rem 0.8rem;
@@ -230,13 +291,16 @@ textarea {
 }
 
 #card-question {
-    font-weight: normal; /* improved readability – lighter weight */
-    font-size: 1.5rem; /* keep size for clarity */
+    font-weight: normal;
+    /* improved readability – lighter weight */
+    font-size: 1.5rem;
+    /* keep size for clarity */
 }
 
 #card-answer {
     margin-top: 0.5rem;
-    font-size: 1.3rem; /* larger traditional Chinese text */
+    font-size: 1.3rem;
+    /* larger traditional Chinese text */
 }
 
 #card-audio {
@@ -254,7 +318,8 @@ audio::-webkit-media-controls-play-button,
 audio::-webkit-media-controls-volume-slider,
 audio::-webkit-media-controls-time-remaining-display,
 audio::-webkit-media-controls-current-time-display {
-    filter: invert(1); /* make icons/text white for contrast */
+    filter: invert(1);
+    /* make icons/text white for contrast */
 }
 
 /* Layout for inline audio buttons */
@@ -327,7 +392,9 @@ button.hidden {
     border-radius: 6px;
     background: #fafafa;
 }
-#gen-sentence-status, #gen-voice-status {
+
+#gen-sentence-status,
+#gen-voice-status {
     margin-left: 0.5rem;
     font-style: italic;
     color: #666;
