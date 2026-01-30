@@ -294,9 +294,6 @@ const reviewSection = document.getElementById("review-section");
 const navAdd = document.getElementById('nav-add');
 const navStudy = document.getElementById('nav-study');
 const navReview = document.getElementById("nav-review");
-const navExport = document.getElementById('nav-export');
-const navImport = document.getElementById('nav-import');
-const importFileInput = document.getElementById('import-file');
 
 const questionInput = document.getElementById('question');
 const answerInput = document.getElementById('answer');
@@ -1049,17 +1046,6 @@ navReview.addEventListener("click", () => {
     reviewSection.classList.remove("hidden");
     renderReviewList();
 });
-navExport.addEventListener('click', () => {
-    const dataStr = 'data:text/json;charset=utf-8,' +
-        encodeURIComponent(JSON.stringify(cards, null, 2));
-    const dl = document.createElement('a');
-    dl.setAttribute('href', dataStr);
-    dl.setAttribute('download', 'flashcards.json');
-    dl.click();
-});
-
-navImport.addEventListener('click', () => importFileInput.click());
-
 // ---- Skip Day ----
 if (skipDayBtn) {
     skipDayBtn.addEventListener('click', async () => {
@@ -1076,65 +1062,6 @@ async function skipOneDay() {
     updateDueCount();
     showNextCard();
 }
-
-importFileInput.addEventListener('change', async (e) => {
-    const file = e.target.files[0];
-    if (!file) return;
-    const reader = new FileReader();
-    reader.onload = async (ev) => {
-        try {
-            const imported = JSON.parse(ev.target.result);
-            if (Array.isArray(imported)) {
-                // Show progress message
-                alert('Importing cards... This may take a moment if there are audio files to upload.');
-
-                // Process cards and upload audio if needed
-                const UUID_RE = /^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/i;
-                const processedCards = [];
-                for (let i = 0; i < imported.length; i++) {
-                    const c = imported[i];
-                    const cardId = (c.id && UUID_RE.test(c.id)) ? c.id : crypto.randomUUID();
-                    let audioUrl = c.audioData;
-
-                    // If audio is a base64 data URL, upload to Supabase Storage
-                    if (audioUrl && audioUrl.startsWith('data:')) {
-                        try {
-                            const audioBlob = window.authService.dataURLtoBlob(audioUrl);
-                            audioUrl = await window.authService.uploadAudio(audioBlob, cardId);
-                            console.log(`Uploaded audio for card ${i + 1}/${imported.length}`);
-                        } catch (error) {
-                            console.error('Error uploading audio for card:', cardId, error);
-                            // Keep the data URL if upload fails
-                        }
-                    }
-
-                    processedCards.push({
-                        ...c,
-                        id: cardId,
-                        audioData: audioUrl,
-                        pinned: !!c.pinned,
-                        order: typeof c.order === 'number' ? c.order : i
-                    });
-                }
-
-                cards = processedCards;
-                normalizeOrders();
-                await saveCards(cards);
-                renderCardList();
-                renderReviewList();
-                alert('Import successful! All cards have been uploaded to the cloud.');
-            } else {
-                alert('Invalid file');
-            }
-        } catch (err) {
-            console.error('Import error:', err);
-            alert('Error importing file: ' + err.message);
-        }
-    };
-    reader.readAsText(file);
-    // reset
-    importFileInput.value = '';
-});
 
 // ---- Add card ----
 
