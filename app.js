@@ -225,8 +225,13 @@ let currentReviewCard = null;
 
 const studySection = document.getElementById('study-section');
 const reviewSection = document.getElementById("review-section");
+const recentSection = document.getElementById("recent-section");
+const starredSection = document.getElementById("starred-section");
+
 const navStudy = document.getElementById('nav-study');
 const navReview = document.getElementById("nav-review");
+const navRecent = document.getElementById("nav-recent");
+const navStarred = document.getElementById("nav-starred");
 
 const dueCountEl = document.getElementById('due-count');
 const skipDayBtn = document.getElementById('skip-day-btn');
@@ -253,6 +258,13 @@ const reviewRestartBtn = document.getElementById("review-restart-btn");
 const reviewSpeedToggleBtn = document.getElementById("review-speed-toggle-btn");
 const reviewShowAnswerBtn = document.getElementById("review-show-answer");
 const ratingButtons = document.querySelectorAll('.rating-buttons button');
+const starButtons = document.querySelectorAll('.star-btn');
+const recentList = document.getElementById("recent-list");
+const starredList = document.getElementById("starred-list");
+
+const celebrationModal = document.getElementById('celebration-modal');
+const closeCelebrationBtn = document.getElementById('close-celebration-btn');
+
 
 // ==================== AUDIO STATE ====================
 
@@ -261,12 +273,79 @@ let reviewAudioAdvanceTimeout = null;
 let fastPlayback = false;
 let reviewPlaybackOrder = [];
 let reviewPlaybackIndex = -1;
+let cardAudioRetryCount = 0;
+let reviewAudioRetryCount = 0;
+let cardAudioRetryTimeout = null;
+let reviewAudioRetryTimeout = null;
+const MAX_AUDIO_RETRIES = 3;
 
 // ==================== AUDIO CONTROLS ====================
+
+// Helper function to play audio with retry logic
+function playAudioWithRetry(audioElement, retryCountRef, toggleBtn, audioType = 'card') {
+    const isCardAudio = audioType === 'card';
+    const maxRetries = MAX_AUDIO_RETRIES;
+
+    return audioElement.play().catch((error) => {
+        console.error(`Audio playback failed for ${audioType}:`, error);
+
+        const currentRetry = isCardAudio ? cardAudioRetryCount : reviewAudioRetryCount;
+
+        if (currentRetry < maxRetries) {
+            // Increment retry count
+            if (isCardAudio) {
+                cardAudioRetryCount++;
+            } else {
+                reviewAudioRetryCount++;
+            }
+
+            // Update UI to show retry attempt
+            if (toggleBtn) {
+                toggleBtn.textContent = `🔄 ${currentRetry + 1}/${maxRetries}`;
+                toggleBtn.disabled = true;
+            }
+
+            // Exponential backoff: 500ms, 1000ms, 2000ms
+            const retryDelay = 500 * Math.pow(2, currentRetry);
+
+            console.log(`Retrying audio playback in ${retryDelay}ms (attempt ${currentRetry + 1}/${maxRetries})`);
+
+            const retryAction = () => {
+                if (toggleBtn) {
+                    toggleBtn.disabled = false;
+                }
+                playAudioWithRetry(audioElement, retryCountRef, toggleBtn, audioType);
+            };
+
+            if (isCardAudio) {
+                cardAudioRetryTimeout = setTimeout(retryAction, retryDelay);
+            } else {
+                reviewAudioRetryTimeout = setTimeout(retryAction, retryDelay);
+            }
+        } else {
+            // All retries exhausted
+            console.error(`Audio playback failed after ${maxRetries} retries`);
+            if (toggleBtn) {
+                toggleBtn.textContent = '❌';
+                toggleBtn.disabled = false;
+                toggleBtn.title = 'Audio failed to load. Click to retry.';
+            }
+            // Reset retry count for next attempt
+            if (isCardAudio) {
+                cardAudioRetryCount = 0;
+            } else {
+                reviewAudioRetryCount = 0;
+            }
+        }
+    });
+}
 
 function stopAudio() {
     clearTimeout(audioLoopTimeout);
     audioLoopTimeout = null;
+    clearTimeout(cardAudioRetryTimeout);
+    cardAudioRetryTimeout = null;
+    cardAudioRetryCount = 0;
     if (cardAudio) {
         cardAudio.pause();
         cardAudio.onended = null;
@@ -274,12 +353,17 @@ function stopAudio() {
     }
     if (audioToggleBtn) {
         audioToggleBtn.textContent = '▶️';
+        audioToggleBtn.disabled = false;
+        audioToggleBtn.title = 'Play/Pause';
     }
 }
 
 function stopReviewAudio() {
     clearTimeout(reviewAudioAdvanceTimeout);
     reviewAudioAdvanceTimeout = null;
+    clearTimeout(reviewAudioRetryTimeout);
+    reviewAudioRetryTimeout = null;
+    reviewAudioRetryCount = 0;
     if (reviewAudio) {
         reviewAudio.pause();
         reviewAudio.onended = null;
@@ -287,6 +371,8 @@ function stopReviewAudio() {
     }
     if (reviewAudioToggleBtn) {
         reviewAudioToggleBtn.textContent = "▶️";
+        reviewAudioToggleBtn.disabled = false;
+        reviewAudioToggleBtn.title = 'Play/Pause';
     }
 }
 
@@ -325,7 +411,8 @@ function setupAudioLooping() {
     cardAudio.onended = () => {
         audioLoopTimeout = setTimeout(() => {
             cardAudio.currentTime = 0;
-            cardAudio.play().catch(() => { });
+            cardAudioRetryCount = 0; // Reset retry count for loop playback
+            playAudioWithRetry(cardAudio, cardAudioRetryCount, audioToggleBtn, 'card');
         }, 5000);
     };
 }
@@ -428,12 +515,14 @@ function openReviewCard(id) {
     reviewShowAnswerBtn.classList.remove("hidden");
     reviewCardQuestionEl.textContent = card.question;
     reviewCardAnswerEl.textContent = card.answer;
+    updateStarButtons(card);
     if (card.audioData) {
         reviewAudio.src = card.audioData;
         reviewAudio.load();
         reviewAudio.playbackRate = fastPlayback ? 1.2 : 1;
         setupReviewAutoAdvance();
-        reviewAudio.play().catch(() => { });
+        reviewAudioRetryCount = 0; // Reset retry count for new playback
+        playAudioWithRetry(reviewAudio, reviewAudioRetryCount, reviewAudioToggleBtn, 'review');
         reviewAudioToggleBtn.classList.remove("hidden");
         reviewRewindBtn.classList.remove("hidden");
         reviewRestartBtn.classList.remove("hidden");
@@ -455,24 +544,137 @@ function revealReviewAnswer() {
     reviewShowAnswerBtn.classList.add("hidden");
 }
 
+function renderRecentList() {
+    if (!recentList) return;
+    recentList.innerHTML = "";
+
+    const recentCards = cards
+        .filter(c => c.repetitions > 0 && c.nextReview !== Date.now()) // roughly checks if played
+        .sort((a, b) => (b.nextReview - a.nextReview)); // approximating "recently played" by nextReview time (newly reviewed cards have future dates)
+
+    // Better approximation: we really should track 'lastReview' time, but 'nextReview' implies recently modified
+    // A more accurate sort would be by updated_at if available, but nextReview works as a proxy for now.
+
+    if (recentCards.length === 0) {
+        recentList.innerHTML = "<li>No recently played cards.</li>";
+        return;
+    }
+
+    recentCards.forEach(card => {
+        const li = document.createElement("li");
+        li.textContent = card.title || card.id;
+        li.addEventListener("click", () => {
+            // When clicking from recent, open in Review mode for simplicity
+            stopAudio();
+            stopReviewAudio();
+            studySection.classList.add("hidden");
+            recentSection.classList.add("hidden");
+            starredSection.classList.add("hidden");
+            reviewSection.classList.remove("hidden");
+            renderReviewList(); // ensure list is ready
+            openReviewCard(card.id);
+        });
+        recentList.appendChild(li);
+    });
+}
+
+function renderStarredList() {
+    if (!starredList) return;
+    starredList.innerHTML = "";
+
+    const starredCards = cards
+        .filter(c => c.isStarred)
+        .sort((a, b) => {
+            const timeA = new Date(a.starredAt || 0).getTime();
+            const timeB = new Date(b.starredAt || 0).getTime();
+            return timeB - timeA;
+        });
+
+    if (starredCards.length === 0) {
+        starredList.innerHTML = "<li>No starred cards yet.</li>";
+        return;
+    }
+
+    starredCards.forEach(card => {
+        const li = document.createElement("li");
+        li.textContent = card.title || card.id;
+        li.addEventListener("click", () => {
+            // When clicking from starred, open in Review mode
+            stopAudio();
+            stopReviewAudio();
+            studySection.classList.add("hidden");
+            recentSection.classList.add("hidden");
+            starredSection.classList.add("hidden");
+            reviewSection.classList.remove("hidden");
+            renderReviewList();
+            openReviewCard(card.id);
+        });
+        starredList.appendChild(li);
+    });
+}
+
+function updateStarButtons(card) {
+    starButtons.forEach(btn => {
+        btn.textContent = card.isStarred ? "★" : "☆";
+        btn.classList.toggle("filled", card.isStarred);
+    });
+}
+
 // ==================== NAVIGATION ====================
 
 navStudy.addEventListener('click', () => {
-    // Stop all audio when switching to Test section
     stopAudio();
     stopReviewAudio();
     startStudy();
     reviewSection.classList.add("hidden");
+    recentSection.classList.add("hidden");
+    starredSection.classList.add("hidden");
     studySection.classList.remove('hidden');
+
+    // Update active state
+    updateNavActive(navStudy);
 });
 
 navReview.addEventListener("click", () => {
     stopAudio();
     stopReviewAudio();
     studySection.classList.add("hidden");
+    recentSection.classList.add("hidden");
+    starredSection.classList.add("hidden");
     reviewSection.classList.remove("hidden");
     renderReviewList();
+
+    updateNavActive(navReview);
 });
+
+navRecent.addEventListener("click", () => {
+    stopAudio();
+    stopReviewAudio();
+    studySection.classList.add("hidden");
+    reviewSection.classList.add("hidden");
+    starredSection.classList.add("hidden");
+    recentSection.classList.remove("hidden");
+    renderRecentList();
+
+    updateNavActive(navRecent);
+});
+
+navStarred.addEventListener("click", () => {
+    stopAudio();
+    stopReviewAudio();
+    studySection.classList.add("hidden");
+    reviewSection.classList.add("hidden");
+    recentSection.classList.add("hidden");
+    starredSection.classList.remove("hidden");
+    renderStarredList();
+
+    updateNavActive(navStarred);
+});
+
+function updateNavActive(activeBtn) {
+    [navStudy, navReview, navRecent, navStarred].forEach(btn => btn.classList.remove("active"));
+    activeBtn.classList.add("active");
+}
 
 // ==================== SKIP DAY ====================
 
@@ -516,19 +718,25 @@ function showNextCard() {
     const dueCards = cards.filter((c) => c.nextReview <= Date.now());
     if (dueCards.length === 0) {
         noDueEl.classList.remove('hidden');
+        // If we just finished a card (implied by this function being called), show celebration
+        if (currentCard) {
+            celebrationModal.classList.remove('hidden');
+        }
         return;
     }
 
     currentCard = dueCards.sort((a, b) => a.nextReview - b.nextReview)[0];
     cardQuestionEl.textContent = currentCard.question;
     cardAnswerEl.textContent = currentCard.answer;
+    updateStarButtons(currentCard);
 
     if (currentCard.audioData) {
         cardAudio.src = currentCard.audioData;
         cardAudio.load();
         cardAudio.playbackRate = fastPlayback ? 1.2 : 1;
         setupAudioLooping();
-        cardAudio.play().catch(() => { });
+        cardAudioRetryCount = 0; // Reset retry count for new playback
+        playAudioWithRetry(cardAudio, cardAudioRetryCount, audioToggleBtn, 'card');
         if (audioToggleBtn) {
             audioToggleBtn.classList.remove('hidden');
             audioToggleBtn.textContent = '▶️';
@@ -565,7 +773,8 @@ if (audioToggleBtn) {
     audioToggleBtn.addEventListener('click', () => {
         if (cardAudio.paused) {
             setupAudioLooping();
-            cardAudio.play().catch(() => { });
+            cardAudioRetryCount = 0; // Reset retry count
+            playAudioWithRetry(cardAudio, cardAudioRetryCount, audioToggleBtn, 'card');
         } else {
             clearTimeout(audioLoopTimeout);
             audioLoopTimeout = null;
@@ -577,6 +786,37 @@ if (audioToggleBtn) {
     });
     cardAudio.addEventListener('pause', () => {
         audioToggleBtn.textContent = '▶️';
+    });
+
+    // Error handling for card audio
+    cardAudio.addEventListener('error', (e) => {
+        console.error('Card audio error:', e);
+        console.error('Audio error code:', cardAudio.error?.code, 'message:', cardAudio.error?.message);
+        if (audioToggleBtn) {
+            audioToggleBtn.textContent = '❌';
+            audioToggleBtn.title = 'Audio failed to load. Click to retry.';
+        }
+    });
+
+    cardAudio.addEventListener('stalled', () => {
+        console.warn('Card audio stalled - network issue detected');
+        if (audioToggleBtn) {
+            audioToggleBtn.textContent = '⏳';
+            audioToggleBtn.title = 'Audio loading stalled...';
+        }
+    });
+
+    cardAudio.addEventListener('waiting', () => {
+        if (audioToggleBtn) {
+            audioToggleBtn.textContent = '⏳';
+        }
+    });
+
+    cardAudio.addEventListener('canplay', () => {
+        if (audioToggleBtn && audioToggleBtn.textContent === '⏳') {
+            audioToggleBtn.textContent = cardAudio.paused ? '▶️' : '⏸️';
+            audioToggleBtn.title = 'Play/Pause';
+        }
     });
 }
 
@@ -592,7 +832,8 @@ if (restartBtn) {
         if (!cardAudio.duration) return;
         cardAudio.currentTime = 0;
         if (!cardAudio.paused) {
-            cardAudio.play().catch(() => { });
+            cardAudioRetryCount = 0; // Reset retry count
+            playAudioWithRetry(cardAudio, cardAudioRetryCount, audioToggleBtn, 'card');
         }
     });
 }
@@ -617,8 +858,33 @@ ratingButtons.forEach((btn) => {
     });
 });
 
+
+
+starButtons.forEach(btn => {
+    btn.addEventListener('click', async (e) => {
+        e.stopPropagation(); // prevent triggering card click/flip if bubbled
+        const card = currentReviewCard && !reviewCardBox.classList.contains("hidden")
+            ? currentReviewCard
+            : currentCard;
+
+        if (!card) return;
+
+        card.isStarred = !card.isStarred;
+        card.starredAt = card.isStarred ? new Date().toISOString() : null;
+        updateStarButtons(card);
+
+        await window.authService.saveCardProgress(card);
+    });
+});
+
 reviewCardQuestionEl.addEventListener("click", revealReviewAnswer);
 reviewShowAnswerBtn.addEventListener("click", revealReviewAnswer);
+
+if (closeCelebrationBtn) {
+    closeCelebrationBtn.addEventListener('click', () => {
+        celebrationModal.classList.add('hidden');
+    });
+}
 
 if (reviewAudioToggleBtn) {
     reviewAudioToggleBtn.addEventListener("click", () => {
@@ -626,7 +892,8 @@ if (reviewAudioToggleBtn) {
             clearTimeout(reviewAudioAdvanceTimeout);
             reviewAudioAdvanceTimeout = null;
             setupReviewAutoAdvance();
-            reviewAudio.play().catch(() => { });
+            reviewAudioRetryCount = 0; // Reset retry count
+            playAudioWithRetry(reviewAudio, reviewAudioRetryCount, reviewAudioToggleBtn, 'review');
         } else {
             clearTimeout(reviewAudioAdvanceTimeout);
             reviewAudioAdvanceTimeout = null;
@@ -640,6 +907,37 @@ if (reviewAudioToggleBtn) {
     });
     reviewAudio.addEventListener("pause", () => {
         reviewAudioToggleBtn.textContent = "▶️";
+    });
+
+    // Error handling for review audio
+    reviewAudio.addEventListener('error', (e) => {
+        console.error('Review audio error:', e);
+        console.error('Audio error code:', reviewAudio.error?.code, 'message:', reviewAudio.error?.message);
+        if (reviewAudioToggleBtn) {
+            reviewAudioToggleBtn.textContent = '❌';
+            reviewAudioToggleBtn.title = 'Audio failed to load. Click to retry.';
+        }
+    });
+
+    reviewAudio.addEventListener('stalled', () => {
+        console.warn('Review audio stalled - network issue detected');
+        if (reviewAudioToggleBtn) {
+            reviewAudioToggleBtn.textContent = '⏳';
+            reviewAudioToggleBtn.title = 'Audio loading stalled...';
+        }
+    });
+
+    reviewAudio.addEventListener('waiting', () => {
+        if (reviewAudioToggleBtn) {
+            reviewAudioToggleBtn.textContent = '⏳';
+        }
+    });
+
+    reviewAudio.addEventListener('canplay', () => {
+        if (reviewAudioToggleBtn && reviewAudioToggleBtn.textContent === '⏳') {
+            reviewAudioToggleBtn.textContent = reviewAudio.paused ? '▶️' : '⏸️';
+            reviewAudioToggleBtn.title = 'Play/Pause';
+        }
     });
 }
 
@@ -659,7 +957,8 @@ if (reviewRestartBtn) {
         reviewAudioAdvanceTimeout = null;
         reviewAudio.currentTime = 0;
         if (!reviewAudio.paused) {
-            reviewAudio.play().catch(() => { });
+            reviewAudioRetryCount = 0; // Reset retry count
+            playAudioWithRetry(reviewAudio, reviewAudioRetryCount, reviewAudioToggleBtn, 'review');
         }
     });
 }
