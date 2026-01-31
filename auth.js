@@ -226,7 +226,9 @@
                     interval: p.interval || 0,
                     repetitions: p.repetitions || 0,
                     easeFactor: parseFloat(p.ease_factor) || 2.5,
-                    nextReview: p.next_review || Date.now()
+                    nextReview: p.next_review || Date.now(),
+                    isStarred: p.is_starred || false,
+                    starredAt: p.starred_at || null
                 };
             });
 
@@ -266,6 +268,8 @@
                     repetitions: progress.repetitions || 0,
                     easeFactor: progress.easeFactor || 2.5,
                     nextReview: progress.nextReview || Date.now(),
+                    isStarred: progress.isStarred || false,
+                    starredAt: progress.starredAt || null,
                     pinned: false,
                     order: index
                 };
@@ -290,16 +294,18 @@
                 return;
             }
 
-            // Only save progress data for cards that have been reviewed
+            // Only save progress data for cards that have been reviewed or starred
             const progressToSave = cards
-                .filter(card => card.repetitions > 0 || card.nextReview !== Date.now())
+                .filter(card => card.repetitions > 0 || card.nextReview !== Date.now() || card.isStarred)
                 .map(card => ({
                     card_id: card.id,
                     user_id: currentUser.id,
                     interval: card.interval || 0,
                     repetitions: card.repetitions || 0,
                     ease_factor: card.easeFactor || 2.5,
-                    next_review: card.nextReview || Date.now()
+                    next_review: card.nextReview || Date.now(),
+                    is_starred: card.isStarred || false,
+                    starred_at: card.starredAt || null
                 }));
 
             if (progressToSave.length > 0) {
@@ -337,7 +343,9 @@
                     interval: card.interval || 0,
                     repetitions: card.repetitions || 0,
                     ease_factor: card.easeFactor || 2.5,
-                    next_review: card.nextReview || Date.now()
+                    next_review: card.nextReview || Date.now(),
+                    is_starred: card.isStarred || false,
+                    starred_at: card.starredAt || null
                 }, {
                     onConflict: 'card_id,user_id'
                 });
