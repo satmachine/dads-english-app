@@ -297,6 +297,11 @@ function playAudioWithRetry(audioElement, retryCountRef, toggleBtn, audioType = 
     const maxRetries = MAX_AUDIO_RETRIES;
 
     return audioElement.play().catch((error) => {
+        // Ignore AbortError which happens naturally when playback is interrupted (e.g. by new playback)
+        if (error.name === 'AbortError') {
+            return;
+        }
+
         console.error(`Audio playback failed for ${audioType}:`, error);
 
         const currentRetry = isCardAudio ? cardAudioRetryCount : reviewAudioRetryCount;
@@ -531,8 +536,7 @@ function openReviewCard(id) {
         reviewAudio.load();
         reviewAudio.playbackRate = fastPlayback ? 1.2 : 1;
         setupReviewAutoAdvance();
-        reviewAudioRetryCount = 0; // Reset retry count for new playback
-        playAudioWithRetry(reviewAudio, reviewAudioRetryCount, reviewAudioToggleBtn, 'review');
+        reviewAudioRetryCount = 0; // Reset retry count for when user taps play
         reviewAudioToggleBtn.classList.remove("hidden");
         reviewRewindBtn.classList.remove("hidden");
         reviewRestartBtn.classList.remove("hidden");
@@ -751,8 +755,7 @@ function showNextCard() {
         cardAudio.load();
         cardAudio.playbackRate = fastPlayback ? 1.2 : 1;
         setupAudioLooping();
-        cardAudioRetryCount = 0; // Reset retry count for new playback
-        playAudioWithRetry(cardAudio, cardAudioRetryCount, audioToggleBtn, 'card');
+        cardAudioRetryCount = 0; // Reset retry count for when user taps play
         if (audioToggleBtn) {
             audioToggleBtn.classList.remove('hidden');
             audioToggleBtn.textContent = '▶️';
