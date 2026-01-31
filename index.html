@@ -1,5 +1,6 @@
 <!DOCTYPE html>
 <html lang="en">
+
 <head>
     <meta charset="UTF-8" />
     <meta name="viewport" content="width=device-width, initial-scale=1.0" />
@@ -8,6 +9,7 @@
     <script src="https://cdn.jsdelivr.net/npm/@supabase/supabase-js@2"></script>
     <script src="config.js"></script>
 </head>
+
 <body>
     <!-- Authentication Section -->
     <section id="auth-section" class="auth-container">
@@ -64,79 +66,108 @@
 
     <!-- Main App (hidden until authenticated) -->
     <div id="app-container" class="hidden">
-    <header>
-        <div class="header-content">
-            <h1>Dad's English App</h1>
-            <div class="user-info">
-                <span id="user-email"></span>
-                <button id="logout-btn" class="small-nav">Logout</button>
-            </div>
-        </div>
-        <nav>
-            <button id="nav-study">Test</button>
-            <button id="nav-review">Study</button>
-        </nav>
-    </header>
-
-    <main>
-        <section id="review-section" class="hidden">
-            <h2>Study Cards</h2>
-            <ul id="review-list"></ul>
-            <div id="review-card-box" class="hidden">
-                <p id="review-card-question"></p>
-                <audio id="review-card-audio"></audio>
-                <div class="audio-controls">
-                    <button id="review-restart-btn" class="secondary-btn hidden" title="Restart">⏮️</button>
-                    <button id="review-rewind-5-btn" class="secondary-btn hidden">⏪ 5s</button>
-                    <button id="review-audio-toggle-btn" class="secondary-btn hidden" title="Play/Pause">▶️</button>
-                    <button id="review-speed-toggle-btn" class="secondary-btn hidden" title="Toggle between normal and 1.2x speed">1x</button>
-                </div>
-                <button id="review-show-answer" class="primary-btn">Show Answer</button>
-                <div id="review-reveal-area" class="hidden">
-                    <hr />
-                    <p id="review-card-answer"></p>
+        <header>
+            <div class="header-content">
+                <h1>Dad's English App</h1>
+                <div class="user-info">
+                    <span id="user-email"></span>
+                    <button id="logout-btn" class="small-nav">Logout</button>
                 </div>
             </div>
-        </section>
+            <nav>
+                <button id="nav-study">Test</button>
+                <button id="nav-review">Study</button>
+                <button id="nav-recent">Recent</button>
+                <button id="nav-starred">Starred</button>
+            </nav>
+        </header>
 
-        <!-- Test section -->
-        <section id="study-section" class="active">
-            <h2>Test</h2>
-            <div id="study-area">
-                <p id="due-count"></p>
-                <button id="skip-day-btn" class="secondary-btn">Skip One Day</button>
-                <div id="card-box" class="hidden">
-                    <p id="card-question"></p>
-                    <audio id="card-audio"></audio>
+        <main>
+            <section id="review-section" class="hidden">
+                <h2>Study Cards</h2>
+                <ul id="review-list"></ul>
+                <div id="review-card-box" class="hidden">
+                    <button class="star-btn absolute-star" title="Star this card">☆</button>
+                    <p id="review-card-question"></p>
+                    <audio id="review-card-audio"></audio>
                     <div class="audio-controls">
-                        <button id="restart-btn" class="secondary-btn hidden" title="Restart">⏮️</button>
-                        <button id="rewind-5-btn" class="secondary-btn hidden">⏪ 5s</button>
-                        <button id="audio-toggle-btn" class="secondary-btn hidden" title="Play/Pause">▶️</button>
-                        <button id="speed-toggle-btn" class="secondary-btn hidden" title="Toggle between normal and 1.2x speed">1x</button>
+                        <button id="review-restart-btn" class="secondary-btn hidden" title="Restart">⏮️</button>
+                        <button id="review-rewind-5-btn" class="secondary-btn hidden">⏪ 5s</button>
+                        <button id="review-audio-toggle-btn" class="secondary-btn hidden" title="Play/Pause">▶️</button>
+                        <button id="review-speed-toggle-btn" class="secondary-btn hidden"
+                            title="Toggle between normal and 1.2x speed">1x</button>
                     </div>
-                    <button id="show-answer" class="primary-btn">Show Answer</button>
-                    <div id="reveal-area" class="hidden">
+                    <button id="review-show-answer" class="primary-btn">Show Answer</button>
+                    <div id="review-reveal-area" class="hidden">
                         <hr />
-                        <p id="card-answer"></p>
-                        <div class="rating-buttons">
-                            <button data-rating="easy" class="easy-btn">Easy</button>
-                            <button data-rating="hard" class="hard-btn">Hard</button>
+                        <p id="review-card-answer"></p>
+                    </div>
+                </div>
+            </section>
+
+            <!-- Recent Section -->
+            <section id="recent-section" class="hidden">
+                <h2>Recently Played</h2>
+                <ul id="recent-list" class="simple-list"></ul>
+            </section>
+
+            <!-- Starred Section -->
+            <section id="starred-section" class="hidden">
+                <h2>Starred Cards</h2>
+                <ul id="starred-list" class="simple-list"></ul>
+            </section>
+
+            <!-- Test section -->
+            <section id="study-section" class="active">
+                <h2>Test</h2>
+                <div id="study-area">
+                    <p id="due-count"></p>
+                    <button id="skip-day-btn" class="secondary-btn">Skip One Day</button>
+                    <div id="card-box" class="hidden">
+                        <button class="star-btn absolute-star" title="Star this card">☆</button>
+                        <p id="card-question"></p>
+                        <audio id="card-audio"></audio>
+                        <div class="audio-controls">
+                            <button id="restart-btn" class="secondary-btn hidden" title="Restart">⏮️</button>
+                            <button id="rewind-5-btn" class="secondary-btn hidden">⏪ 5s</button>
+                            <button id="audio-toggle-btn" class="secondary-btn hidden" title="Play/Pause">▶️</button>
+                            <button id="speed-toggle-btn" class="secondary-btn hidden"
+                                title="Toggle between normal and 1.2x speed">1x</button>
+                        </div>
+                        <button id="show-answer" class="primary-btn">Show Answer</button>
+                        <div id="reveal-area" class="hidden">
+                            <hr />
+                            <p id="card-answer"></p>
+                            <div class="rating-buttons">
+                                <button data-rating="easy" class="easy-btn">Easy</button>
+                                <button data-rating="hard" class="hard-btn">Hard</button>
+                            </div>
                         </div>
                     </div>
+                    <p id="no-due" class="hidden">No cards are due right now 🎉</p>
                 </div>
-                <p id="no-due" class="hidden">No cards are due right now 🎉</p>
-            </div>
-        </section>
-    </main>
+            </section>
+        </main>
 
-    <footer>
-        <small>
-            All data is securely stored in the cloud and synced across your devices.
-        </small>
-    </footer>
+        <footer>
+            <small>
+                All data is securely stored in the cloud and synced across your devices.
+            </small>
+        </footer>
+        <!-- Celebration Modal -->
+        <div id="celebration-modal" class="hidden">
+            <div class="celebration-content">
+                <div class="celebration-emoji">🎉</div>
+                <h2>Great Job!</h2>
+                <p>You've completed all your cards for today.</p>
+                <button id="close-celebration-btn" class="primary-btn">Back to Dashboard</button>
+            </div>
+        </div>
+
     </div><!-- end app-container -->
 
     <script src="auth.js"></script>
     <script src="app.js"></script>
 </body>
+
 </html>

@@ -182,53 +182,55 @@ async function main() {
   let errorCount = 0;
   const startTime = Date.now();
 
-  for (let i = 0; i < cardsToTranslate.length; i++) {
-    const card = cardsToTranslate[i];
-    const progress = `[${i + 1}/${cardsToTranslate.length}]`;
-    const cardIndex = cards.findIndex(c => c.id === card.id);
+  // Translate cards with concurrency
+  const CONCURRENCY = 50;
+  let processedCount = 0;
 
-    try {
-      process.stdout.write(`${progress} Translating "${card.title || card.id}"...`);
+  for (let i = 0; i < cardsToTranslate.length; i += CONCURRENCY) {
+    const batch = cardsToTranslate.slice(i, i + CONCURRENCY);
 
-      const translation = await translateToTraditionalChinese(card.question);
+    await Promise.all(batch.map(async (card, batchIndex) => {
+      const globalIndex = i + batchIndex;
+      const progress = `[${globalIndex + 1}/${cardsToTranslate.length}]`;
+      const cardIndex = cards.findIndex(c => c.id === card.id);
 
-      if (!isDryRun) {
-        cards[cardIndex].answer = translation;
+      try {
+        console.log(`${progress} Translating "${card.title || card.id}"...`);
+
+        const translation = await translateToTraditionalChinese(card.question);
+
+        if (!isDryRun) {
+          cards[cardIndex].answer = translation;
+        }
+
+        successCount++;
+        processedCount++;
+
+        if (isDryRun && processedCount <= 3) {
+          // Show sample translations in dry run mode
+          console.log('    English: ' + card.question.substring(0, 80) + '...');
+          console.log('    Chinese: ' + translation.substring(0, 80) + '...');
+          console.log('');
+        }
+
+      } catch (error) {
+        errorCount++;
+        console.log(` ✗ Error translating "${card.title || card.id}": ${error.message}`);
+
+        // If we hit rate limits, we should probably pause globally, but for simplicity in parallel mode
+        // we'll just log it. Retrying in parallel mode is more complex without a queue.
+        // Given we are restartable, we can just let it fail and run again for failed ones.
       }
+    }));
 
-      successCount++;
-      console.log(' ✓');
-
-      if (isDryRun && i < 3) {
-        // Show sample translations in dry run mode
-        console.log('    English: ' + card.question.substring(0, 80) + '...');
-        console.log('    Chinese: ' + translation.substring(0, 80) + '...');
-        console.log('');
-      }
-
-      // Rate limiting - wait between requests to avoid hitting API limits
-      if (i < cardsToTranslate.length - 1) {
-        await sleep(500); // 500ms delay between requests
-      }
-
-      // Save progress every 10 cards (in case of interruption)
-      if (!isDryRun && (i + 1) % 10 === 0) {
-        await writeFile(CARDS_PATH, JSON.stringify(cardsData, null, 2));
-        console.log(`    💾 Progress saved (${i + 1} cards)`);
-      }
-
-    } catch (error) {
-      errorCount++;
-      console.log(` ✗ Error: ${error.message}`);
-
-      // If we hit rate limits, wait longer
-      if (error.message.includes('429') || error.message.includes('rate')) {
-        console.log('    Waiting 60 seconds due to rate limit...');
-        await sleep(60000);
-        i--; // Retry this card
-        errorCount--; // Don't count as error if we're retrying
-      }
+    // Save progress periodically
+    if (!isDryRun) {
+      await writeFile(CARDS_PATH, JSON.stringify(cardsData, null, 2));
+      console.log(`    💾 Progress saved (${Math.min(i + CONCURRENCY, cardsToTranslate.length)} cards processed)`);
     }
+
+    // Small delay between batches to be nice to API
+    await sleep(200);
   }
 
   // Final save

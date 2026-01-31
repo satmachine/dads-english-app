@@ -22,6 +22,8 @@ CREATE TABLE IF NOT EXISTS card_progress (
   repetitions INTEGER DEFAULT 0,
   ease_factor NUMERIC(3,2) DEFAULT 2.50,
   next_review BIGINT,  -- timestamp in milliseconds
+  is_starred BOOLEAN DEFAULT FALSE,
+  starred_at TIMESTAMP WITH TIME ZONE,
   created_at TIMESTAMP WITH TIME ZONE DEFAULT NOW(),
   updated_at TIMESTAMP WITH TIME ZONE DEFAULT NOW(),
   PRIMARY KEY (card_id, user_id)
