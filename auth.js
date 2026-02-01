@@ -249,7 +249,8 @@
                     easeFactor: parseFloat(p.ease_factor) || 2.5,
                     nextReview: p.next_review || Date.now(),
                     isStarred: p.is_starred || false,
-                    starredAt: p.starred_at || null
+                    starredAt: p.starred_at || null,
+                    lastReviewed: p.last_reviewed || null
                 };
             });
 
@@ -297,6 +298,7 @@
                     nextReview: progress.nextReview || Date.now(),
                     isStarred: progress.isStarred || false,
                     starredAt: progress.starredAt || null,
+                    lastReviewed: progress.lastReviewed || null,
                     pinned: false,
                     order: index
                 };
@@ -321,9 +323,9 @@
                 return;
             }
 
-            // Only save progress data for cards that have been reviewed or starred
+            // Only save progress data for cards that have been reviewed, starred, or viewed
             const progressToSave = cards
-                .filter(card => card.repetitions > 0 || card.nextReview !== Date.now() || card.isStarred)
+                .filter(card => card.repetitions > 0 || card.nextReview !== Date.now() || card.isStarred || card.lastReviewed)
                 .map(card => ({
                     card_id: card.id,
                     user_id: currentUser.id,
@@ -332,7 +334,8 @@
                     ease_factor: card.easeFactor || 2.5,
                     next_review: card.nextReview || Date.now(),
                     is_starred: card.isStarred || false,
-                    starred_at: card.starredAt || null
+                    starred_at: card.starredAt || null,
+                    last_reviewed: card.lastReviewed || null
                 }));
 
             if (progressToSave.length > 0) {
@@ -370,13 +373,15 @@
                 ease_factor: card.easeFactor || 2.5,
                 next_review: card.nextReview || Date.now(),
                 is_starred: card.isStarred || false,
-                starred_at: card.starredAt || null
+                starred_at: card.starredAt || null,
+                last_reviewed: card.lastReviewed || null
             };
 
             console.log('[saveCardProgress] Saving card progress:', {
                 card_id: progressData.card_id,
                 is_starred: progressData.is_starred,
-                starred_at: progressData.starred_at
+                starred_at: progressData.starred_at,
+                last_reviewed: progressData.last_reviewed
             });
 
             const { data, error } = await supabaseClient

@@ -526,6 +526,14 @@ function openReviewCard(id) {
         reviewPlaybackIndex = 0;
     }
     currentReviewCard = card;
+
+    // Track when this card was last reviewed
+    card.lastReviewed = Date.now();
+    // Save to database
+    if (window.authService && window.authService.saveCardProgress) {
+        window.authService.saveCardProgress(card);
+    }
+
     if (reviewRevealArea) reviewRevealArea.classList.add("hidden");
     if (reviewShowAnswerBtn) reviewShowAnswerBtn.classList.remove("hidden");
     reviewCardQuestionEl.textContent = card.question;
@@ -569,11 +577,8 @@ function renderRecentList() {
     recentList.innerHTML = "";
 
     const recentCards = cards
-        .filter(c => c.repetitions > 0 && c.nextReview !== Date.now()) // roughly checks if played
-        .sort((a, b) => (b.nextReview - a.nextReview)); // approximating "recently played" by nextReview time (newly reviewed cards have future dates)
-
-    // Better approximation: we really should track 'lastReview' time, but 'nextReview' implies recently modified
-    // A more accurate sort would be by updated_at if available, but nextReview works as a proxy for now.
+        .filter(c => c.lastReviewed)  // Only cards that have been viewed
+        .sort((a, b) => b.lastReviewed - a.lastReviewed);  // Most recent first
 
     if (recentCards.length === 0) {
         recentList.innerHTML = "<li>No recently played cards.</li>";
@@ -867,6 +872,8 @@ function setupStudyAndReviewListeners() {
                 const value = btn.dataset.rating;
                 if (!currentCard) return;
                 const isEasy = value === 'easy';
+                // Track when this card was last reviewed
+                currentCard.lastReviewed = Date.now();
                 processRatingBinary(currentCard, isEasy);
                 await window.authService.saveCards(cards);
                 updateDueCount();
