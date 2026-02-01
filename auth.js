@@ -219,6 +219,8 @@
 
             if (error) throw error;
 
+            console.log('[fetchProgressFromSupabase] Raw data from Supabase:', data);
+
             // Convert array to map by card_id
             const progressMap = {};
             (data || []).forEach(p => {
@@ -231,6 +233,12 @@
                     starredAt: p.starred_at || null
                 };
             });
+
+            // Log starred cards for debugging
+            const starredCards = Object.entries(progressMap)
+                .filter(([id, p]) => p.isStarred)
+                .map(([id, p]) => ({ id, isStarred: p.isStarred, starredAt: p.starredAt }));
+            console.log('[fetchProgressFromSupabase] Starred cards found:', starredCards);
 
             return progressMap;
         } catch (error) {
@@ -335,22 +343,36 @@
                 return { success: false, error: 'Not logged in' };
             }
 
-            const { error } = await supabaseClient
-                .from('card_progress')
-                .upsert({
-                    card_id: card.id,
-                    user_id: currentUser.id,
-                    interval: card.interval || 0,
-                    repetitions: card.repetitions || 0,
-                    ease_factor: card.easeFactor || 2.5,
-                    next_review: card.nextReview || Date.now(),
-                    is_starred: card.isStarred || false,
-                    starred_at: card.starredAt || null
-                }, {
-                    onConflict: 'card_id,user_id'
-                });
+            const progressData = {
+                card_id: card.id,
+                user_id: currentUser.id,
+                interval: card.interval || 0,
+                repetitions: card.repetitions || 0,
+                ease_factor: card.easeFactor || 2.5,
+                next_review: card.nextReview || Date.now(),
+                is_starred: card.isStarred || false,
+                starred_at: card.starredAt || null
+            };
 
-            if (error) throw error;
+            console.log('[saveCardProgress] Saving card progress:', {
+                card_id: progressData.card_id,
+                is_starred: progressData.is_starred,
+                starred_at: progressData.starred_at
+            });
+
+            const { data, error } = await supabaseClient
+                .from('card_progress')
+                .upsert(progressData, {
+                    onConflict: 'card_id,user_id'
+                })
+                .select();
+
+            if (error) {
+                console.error('[saveCardProgress] Supabase error:', error);
+                throw error;
+            }
+
+            console.log('[saveCardProgress] Save successful, returned data:', data);
 
             return { success: true };
         } catch (error) {
