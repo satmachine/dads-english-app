@@ -542,6 +542,8 @@ function openReviewCard(id) {
         reviewRestartBtn.classList.remove("hidden");
         reviewSpeedToggleBtn.classList.remove("hidden");
         reviewSpeedToggleBtn.textContent = fastPlayback ? "1.2x" : "1x";
+        // Auto-play audio when card is opened
+        playAudioWithRetry(reviewAudio, reviewAudioRetryCount, reviewAudioToggleBtn, 'review');
     } else {
         if (reviewAudio) {
             reviewAudio.removeAttribute("src");
@@ -553,6 +555,8 @@ function openReviewCard(id) {
         if (reviewSpeedToggleBtn) reviewSpeedToggleBtn.classList.add("hidden");
     }
     reviewCardBox.classList.remove("hidden");
+    // Scroll to make the flash card visible
+    reviewCardBox.scrollIntoView({ behavior: 'smooth', block: 'start' });
 }
 
 function revealReviewAnswer() {
