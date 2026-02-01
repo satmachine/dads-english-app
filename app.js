@@ -886,7 +886,14 @@ function setupStudyAndReviewListeners() {
                 card.isStarred = !card.isStarred;
                 card.starredAt = card.isStarred ? new Date().toISOString() : null;
                 updateStarButtons(card);
-                await window.authService.saveCardProgress(card);
+                const result = await window.authService.saveCardProgress(card);
+                if (!result.success) {
+                    console.error('Failed to save starred state:', result.error);
+                    // Revert the starred state if save failed
+                    card.isStarred = !card.isStarred;
+                    card.starredAt = card.isStarred ? new Date().toISOString() : null;
+                    updateStarButtons(card);
+                }
             });
         });
     }

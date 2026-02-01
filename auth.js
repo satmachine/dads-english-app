@@ -219,6 +219,27 @@
 
             if (error) throw error;
 
+            console.log('[fetchProgressFromSupabase] Raw data from Supabase:', data);
+
+            // Check if starred columns exist in the database schema
+            if (data && data.length > 0) {
+                const sampleRow = data[0];
+                const hasIsStarred = 'is_starred' in sampleRow;
+                const hasStarredAt = 'starred_at' in sampleRow;
+
+                if (!hasIsStarred || !hasStarredAt) {
+                    console.error('⚠️ STARRED COLUMNS MISSING IN DATABASE!');
+                    console.error('The is_starred and/or starred_at columns do not exist in card_progress table.');
+                    console.error('Please run the migration in Supabase SQL Editor:');
+                    console.error('ALTER TABLE card_progress ADD COLUMN IF NOT EXISTS is_starred BOOLEAN DEFAULT FALSE;');
+                    console.error('ALTER TABLE card_progress ADD COLUMN IF NOT EXISTS starred_at TIMESTAMP WITH TIME ZONE;');
+                    console.error('Missing columns:', {
+                        is_starred: !hasIsStarred,
+                        starred_at: !hasStarredAt
+                    });
+                }
+            }
+
             // Convert array to map by card_id
             const progressMap = {};
             (data || []).forEach(p => {
@@ -231,6 +252,12 @@
                     starredAt: p.starred_at || null
                 };
             });
+
+            // Log starred cards for debugging
+            const starredCards = Object.entries(progressMap)
+                .filter(([id, p]) => p.isStarred)
+                .map(([id, p]) => ({ id, isStarred: p.isStarred, starredAt: p.starredAt }));
+            console.log('[fetchProgressFromSupabase] Starred cards found:', starredCards);
 
             return progressMap;
         } catch (error) {
@@ -335,22 +362,53 @@
                 return { success: false, error: 'Not logged in' };
             }
 
-            const { error } = await supabaseClient
-                .from('card_progress')
-                .upsert({
-                    card_id: card.id,
-                    user_id: currentUser.id,
-                    interval: card.interval || 0,
-                    repetitions: card.repetitions || 0,
-                    ease_factor: card.easeFactor || 2.5,
-                    next_review: card.nextReview || Date.now(),
-                    is_starred: card.isStarred || false,
-                    starred_at: card.starredAt || null
-                }, {
-                    onConflict: 'card_id,user_id'
-                });
+            const progressData = {
+                card_id: card.id,
+                user_id: currentUser.id,
+                interval: card.interval || 0,
+                repetitions: card.repetitions || 0,
+                ease_factor: card.easeFactor || 2.5,
+                next_review: card.nextReview || Date.now(),
+                is_starred: card.isStarred || false,
+                starred_at: card.starredAt || null
+            };
 
-            if (error) throw error;
+            console.log('[saveCardProgress] Saving card progress:', {
+                card_id: progressData.card_id,
+                is_starred: progressData.is_starred,
+                starred_at: progressData.starred_at
+            });
+
+            const { data, error } = await supabaseClient
+                .from('card_progress')
+                .upsert(progressData, {
+                    onConflict: 'card_id,user_id'
+                })
+                .select();
+
+            if (error) {
+                console.error('[saveCardProgress] Supabase error:', error);
+                // Check if error is about missing columns
+                if (error.message && (error.message.includes('is_starred') || error.message.includes('starred_at'))) {
+                    console.error('⚠️ STARRED COLUMNS MISSING! Run migration_add_starred.sql in Supabase SQL Editor');
+                }
+                throw error;
+            }
+
+            console.log('[saveCardProgress] Save successful, returned data:', data);
+
+            // Verify the starred data was actually saved
+            if (data && data.length > 0) {
+                const savedRow = data[0];
+                if (!('is_starred' in savedRow)) {
+                    console.error('⚠️ WARNING: is_starred column missing from saved data!');
+                    console.error('The starred columns may not exist in the database.');
+                    console.error('Run: ALTER TABLE card_progress ADD COLUMN IF NOT EXISTS is_starred BOOLEAN DEFAULT FALSE;');
+                } else if (savedRow.is_starred !== progressData.is_starred) {
+                    console.error('⚠️ WARNING: Saved is_starred value does not match!');
+                    console.error('Expected:', progressData.is_starred, 'Got:', savedRow.is_starred);
+                }
+            }
 
             return { success: true };
         } catch (error) {
