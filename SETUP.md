@@ -6,7 +6,7 @@ This guide will help you set up the cloud-based version of Dad's English App wit
 
 The app has been migrated from local storage (IndexedDB) to cloud-based storage using Supabase. Key features:
 
-✅ **User Authentication** - Secure login with email/password
+✅ **User Authentication** - Secure login with name + 4-digit PIN
 ✅ **Cloud Storage** - All flashcards stored in Supabase PostgreSQL database
 ✅ **Cloud Audio** - Audio files stored in Supabase Storage
 ✅ **Multi-Device Sync** - Access your cards from any device
@@ -65,22 +65,24 @@ const SUPABASE_CONFIG = {
 5. Click **"Run"** (or press Ctrl+Enter)
 6. You should see "Success. No rows returned" - this means the tables were created successfully
 
-### Step 5: Enable Email Authentication
+### Step 5: Configure Supabase Auth for Name + PIN
 
 1. In Supabase, click **Authentication** in the left sidebar
 2. Click **Providers** tab
-3. Make sure **Email** is enabled (it should be by default)
-4. Optional: Configure email templates under **Email Templates** tab
+3. Make sure **Email** is enabled
+4. Turn **OFF** "Confirm email" for this app
+5. Save changes
+
+> Why: this app uses generated emails like `henry@dadsapp.local` for name+PIN login. If email confirmation is required, login can fail or hit email rate limits.
 
 ### Step 6: Launch the App
 
 1. Open `index.html` in your web browser
 2. You should see the login screen
-3. Click **"Register"** to create your first account
-4. Fill in your email and password (minimum 6 characters)
-5. Check your email for a verification link (check spam folder if needed)
-6. Click the verification link
-7. Return to the app and login with your credentials
+3. Enter your name (for example: `henry`)
+4. Enter a 4-digit PIN (for example: `1234`)
+5. Click **"Create New Account"** the first time
+6. On later visits, use **"Start Learning"** with the same name + PIN
 
 ---
 
@@ -139,8 +141,8 @@ request.onsuccess = () => {
 
 ### User Authentication
 
-- **Register**: Create a new account with email and password
-- **Login**: Access your cards from any device
+- **Create New Account**: Register with name + 4-digit PIN
+- **Start Learning**: Sign in with existing name + 4-digit PIN
 - **Logout**: Click the logout button in the top right
 
 ### Card Management
@@ -180,14 +182,13 @@ All existing features work the same:
 2. Make sure you ran the database-schema.sql script
 3. Check Supabase dashboard for any errors in the database
 
-### Email Verification Not Received
+### "email rate limit exceeded"
 
 **Solutions**:
-1. Check your spam/junk folder
-2. In Supabase, go to **Authentication** > **Email Templates** and verify SMTP is configured
-3. For development, you can disable email verification:
-   - Go to **Authentication** > **Providers** > **Email**
-   - Uncheck "Confirm email"
+1. Wait 60-120 seconds and retry
+2. In Supabase, go to **Authentication** > **Providers** > **Email**
+3. Make sure **Confirm email** is OFF for this name+PIN setup
+4. Use **Start Learning** for existing users (do not click Create New Account unless it is a new user)
 
 ### Audio Upload Fails
 
@@ -198,12 +199,12 @@ All existing features work the same:
 2. Check storage policies were applied (they're in the SQL script)
 3. Check your internet connection
 
-### Can't Login After Registration
+### Can't Login with Name + PIN
 
 **Solutions**:
-1. Check if email confirmation is required (check email)
-2. In Supabase, go to **Authentication** > **Users** to see if your user exists
-3. Try password reset if needed
+1. Verify the exact same name and PIN are used on every device
+2. Check Supabase **Authentication > Users** for `<name>@dadsapp.local`
+3. If moving from an old email account, use **Migrate old email account** on the login screen
 
 ---
 
@@ -225,7 +226,7 @@ The database schema includes RLS policies that ensure:
 ### Best Practices
 
 1. **Strong Passwords**: Use passwords with at least 8 characters
-2. **Email Verification**: Keep this enabled for production
+2. **Auth Settings**: For this name+PIN flow, keep "Confirm email" disabled unless you switch to real email addresses
 3. **Regular Backups**: Periodically export your cards as JSON
 4. **API Key Rotation**: Rotate your OpenAI API key periodically
 

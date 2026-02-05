@@ -27,7 +27,32 @@
                     <input type="tel" id="login-pin" required maxlength="4" pattern="[0-9]{4}" inputmode="numeric" placeholder="e.g. 1234" autocomplete="off" />
                 </label>
                 <button type="submit" class="primary-btn">Start Learning</button>
+                <button type="button" id="register-btn" class="secondary-btn">Create New Account</button>
                 <p id="login-error" class="error-message hidden"></p>
+            </form>
+            <button type="button" id="show-migration-btn" class="small-nav">Migrate old email account</button>
+
+            <form id="migration-form" class="hidden">
+                <h2>Migrate old account</h2>
+                <label>
+                    Previous Email
+                    <input type="email" id="legacy-email" autocomplete="email" placeholder="e.g. stanlee89@gmail.com" />
+                </label>
+                <label>
+                    Previous Password
+                    <input type="password" id="legacy-password" autocomplete="current-password" placeholder="Old password" />
+                </label>
+                <label>
+                    New Name
+                    <input type="text" id="migration-username" autocomplete="username" placeholder="e.g. henry" />
+                </label>
+                <label>
+                    New 4-Digit PIN
+                    <input type="tel" id="migration-pin" maxlength="4" pattern="[0-9]{4}" inputmode="numeric" placeholder="e.g. 1234" autocomplete="off" />
+                </label>
+                <button type="submit" class="primary-btn">Migrate and Sign In</button>
+                <button type="button" id="hide-migration-btn" class="secondary-btn">Cancel</button>
+                <p id="migration-error" class="error-message hidden"></p>
             </form>
             <p class="auth-hint">Use the same name & PIN on all your devices to sync your progress.</p>
         </div>
