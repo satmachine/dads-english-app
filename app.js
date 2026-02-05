@@ -86,7 +86,8 @@ document.addEventListener('DOMContentLoaded', async () => {
             let result;
 
             // Check if there's an existing legacy session that needs migration
-            if (window.authService.currentUser && window.authService.isLegacyUser()) {
+            // NOTE: authService tracks session state internally, so only rely on isLegacyUser().
+            if (window.authService.isLegacyUser()) {
                 result = await window.authService.migrateExistingUser(username, pin);
             } else {
                 result = await window.authService.signInOrRegister(username, pin);
@@ -124,7 +125,6 @@ document.addEventListener('DOMContentLoaded', async () => {
 
     // Show the main app after successful authentication
     async function showApp(user, username) {
-        window.authService.currentUser = user;
         // Display the username (capitalized) in the header
         var displayName = username || '';
         if (!displayName) {
