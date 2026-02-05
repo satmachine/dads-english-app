@@ -53,6 +53,10 @@ document.addEventListener('DOMContentLoaded', async () => {
     const loginForm = document.getElementById('login-form');
     const logoutBtn = document.getElementById('logout-btn');
     const userNameSpan = document.getElementById('user-name');
+    const registerBtn = document.getElementById('register-btn');
+    const showMigrationBtn = document.getElementById('show-migration-btn');
+    const hideMigrationBtn = document.getElementById('hide-migration-btn');
+    const migrationForm = document.getElementById('migration-form');
 
     let supabaseInitialized = false;
 
@@ -89,7 +93,7 @@ document.addEventListener('DOMContentLoaded', async () => {
             if (window.authService.currentUser && window.authService.isLegacyUser()) {
                 result = await window.authService.migrateExistingUser(username, pin);
             } else {
-                result = await window.authService.signInOrRegister(username, pin);
+                result = await window.authService.signInWithUsernamePin(username, pin);
             }
 
             if (result.success) {
@@ -105,6 +109,101 @@ document.addEventListener('DOMContentLoaded', async () => {
         } finally {
             submitBtn.disabled = false;
             submitBtn.textContent = 'Start Learning';
+        }
+    });
+
+    registerBtn.addEventListener('click', async () => {
+        const username = document.getElementById('login-username').value.trim();
+        const pin = document.getElementById('login-pin').value.trim();
+        const errorEl = document.getElementById('login-error');
+
+        errorEl.classList.add('hidden');
+
+        if (!supabaseInitialized) {
+            errorEl.textContent = 'Error: Supabase is not configured. Please update config.js with your Supabase credentials.';
+            errorEl.classList.remove('hidden');
+            return;
+        }
+
+        if (!username) {
+            errorEl.textContent = 'Please enter a name.';
+            errorEl.classList.remove('hidden');
+            return;
+        }
+
+        if (!/^[0-9]{4}$/.test(pin)) {
+            errorEl.textContent = 'PIN must be exactly 4 digits.';
+            errorEl.classList.remove('hidden');
+            return;
+        }
+
+        registerBtn.disabled = true;
+        registerBtn.textContent = 'Creating...';
+
+        try {
+            const result = await window.authService.registerWithUsernamePin(username, pin);
+            if (result.success) {
+                window.authService.saveCredentials(username, pin);
+                showApp(result.user, username);
+            } else {
+                errorEl.textContent = result.error || 'Could not create account. Please try again.';
+                errorEl.classList.remove('hidden');
+            }
+        } catch (error) {
+            errorEl.textContent = 'An unexpected error occurred: ' + error.message;
+            errorEl.classList.remove('hidden');
+        } finally {
+            registerBtn.disabled = false;
+            registerBtn.textContent = 'Create New Account';
+        }
+    });
+
+    showMigrationBtn.addEventListener('click', () => {
+        migrationForm.classList.remove('hidden');
+    });
+
+    hideMigrationBtn.addEventListener('click', () => {
+        migrationForm.classList.add('hidden');
+    });
+
+    migrationForm.addEventListener('submit', async (e) => {
+        e.preventDefault();
+
+        const legacyEmail = document.getElementById('legacy-email').value.trim();
+        const legacyPassword = document.getElementById('legacy-password').value;
+        const username = document.getElementById('migration-username').value.trim();
+        const pin = document.getElementById('migration-pin').value.trim();
+        const errorEl = document.getElementById('migration-error');
+
+        errorEl.classList.add('hidden');
+
+        if (!legacyEmail || !legacyPassword || !username || !/^[0-9]{4}$/.test(pin)) {
+            errorEl.textContent = 'Please complete all fields, and use a 4-digit PIN.';
+            errorEl.classList.remove('hidden');
+            return;
+        }
+
+        const migrateBtn = migrationForm.querySelector('button[type="submit"]');
+        migrateBtn.disabled = true;
+        migrateBtn.textContent = 'Migrating...';
+
+        try {
+            const result = await window.authService.migrateWithLegacyCredentials(legacyEmail, legacyPassword, username, pin);
+
+            if (result.success) {
+                window.authService.saveCredentials(username, pin);
+                migrationForm.classList.add('hidden');
+                showApp(result.user, username);
+            } else {
+                errorEl.textContent = result.error || 'Could not migrate this account. Please check your old login details.';
+                errorEl.classList.remove('hidden');
+            }
+        } catch (error) {
+            errorEl.textContent = 'An unexpected error occurred: ' + error.message;
+            errorEl.classList.remove('hidden');
+        } finally {
+            migrateBtn.disabled = false;
+            migrateBtn.textContent = 'Migrate and Sign In';
         }
     });
 
@@ -202,7 +301,7 @@ document.addEventListener('DOMContentLoaded', async () => {
             // No active session — try auto-login from saved credentials
             const saved = window.authService.getSavedCredentials();
             if (saved) {
-                const result = await window.authService.signInOrRegister(saved.username, saved.pin);
+                const result = await window.authService.signInWithUsernamePin(saved.username, saved.pin);
                 if (result.success) {
                     showApp(result.user, saved.username);
                 } else {

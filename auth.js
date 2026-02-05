@@ -37,6 +37,7 @@
             window.SUPABASE_CONFIG.anonKey
         );
         console.log('Supabase client created successfully');
+        console.warn('For username+PIN accounts (@dadsapp.local), disable email confirmation in Supabase Auth > Providers > Email.');
 
         return true;
     }
@@ -84,10 +85,28 @@
         };
     }
 
+    function mapAuthError(error) {
+        var message = (error && error.message) ? error.message : 'Authentication failed.';
+
+        if (message.includes('email rate limit exceeded')) {
+            return 'Too many attempts right now. Please wait a minute and try again.';
+        }
+
+        if (message.includes('Invalid login credentials')) {
+            return 'Wrong name or PIN. Please try again.';
+        }
+
+        if (message.includes('Email not confirmed')) {
+            return 'This account requires email confirmation in Supabase before it can sign in.';
+        }
+
+        return message;
+    }
+
     /**
-     * Sign in with username + PIN. Auto-registers if the account doesn't exist yet.
+     * Sign in with username + PIN.
      */
-    async function signInOrRegister(username, pin) {
+    async function signInWithUsernamePin(username, pin) {
         try {
             if (!supabaseClient) {
                 throw new Error('Supabase client not initialized');
@@ -95,55 +114,58 @@
 
             var creds = deriveCredentials(username, pin);
 
-            // Try to sign in first
             var signInResult = await supabaseClient.auth.signInWithPassword({
                 email: creds.email,
                 password: creds.password
             });
 
-            if (!signInResult.error) {
-                currentUser = signInResult.data.user;
-                return { success: true, user: signInResult.data.user };
+            if (signInResult.error) {
+                throw signInResult.error;
             }
 
-            // If invalid credentials, the account may not exist yet — try to register
-            if (signInResult.error.message && signInResult.error.message.includes('Invalid login credentials')) {
-                var signUpResult = await supabaseClient.auth.signUp({
-                    email: creds.email,
-                    password: creds.password
-                });
-
-                if (signUpResult.error) throw signUpResult.error;
-
-                // If we got a session immediately, we're done
-                if (signUpResult.data.session) {
-                    currentUser = signUpResult.data.user;
-                    return { success: true, user: signUpResult.data.user, isNewUser: true };
-                }
-
-                // Otherwise try signing in right after registration
-                var loginResult = await supabaseClient.auth.signInWithPassword({
-                    email: creds.email,
-                    password: creds.password
-                });
-
-                if (loginResult.error) throw loginResult.error;
-
-                currentUser = loginResult.data.user;
-                return { success: true, user: loginResult.data.user, isNewUser: true };
-            }
-
-            // Some other sign-in error
-            throw signInResult.error;
+            currentUser = signInResult.data.user;
+            return { success: true, user: signInResult.data.user };
         } catch (error) {
-            console.error('signInOrRegister error:', error);
+            console.error('signInWithUsernamePin error:', error);
+            return { success: false, error: mapAuthError(error) };
+        }
+    }
 
-            // Provide a friendlier error for wrong PIN
-            if (error.message && error.message.includes('Invalid login credentials')) {
-                return { success: false, error: 'Wrong PIN for this name. Please try again.' };
+    /**
+     * Register a new username + PIN account.
+     */
+    async function registerWithUsernamePin(username, pin) {
+        try {
+            if (!supabaseClient) {
+                throw new Error('Supabase client not initialized');
             }
 
-            return { success: false, error: error.message };
+            var creds = deriveCredentials(username, pin);
+
+            var signUpResult = await supabaseClient.auth.signUp({
+                email: creds.email,
+                password: creds.password
+            });
+
+            if (signUpResult.error) throw signUpResult.error;
+
+            if (signUpResult.data.session) {
+                currentUser = signUpResult.data.user;
+                return { success: true, user: signUpResult.data.user, isNewUser: true };
+            }
+
+            var loginResult = await supabaseClient.auth.signInWithPassword({
+                email: creds.email,
+                password: creds.password
+            });
+
+            if (loginResult.error) throw loginResult.error;
+
+            currentUser = loginResult.data.user;
+            return { success: true, user: loginResult.data.user, isNewUser: true };
+        } catch (error) {
+            console.error('registerWithUsernamePin error:', error);
+            return { success: false, error: mapAuthError(error) };
         }
     }
 
@@ -171,6 +193,30 @@
         } catch (error) {
             console.error('Migration error:', error);
             return { success: false, error: error.message };
+        }
+    }
+
+    /**
+     * Migrate using explicit legacy email/password credentials.
+     */
+    async function migrateWithLegacyCredentials(email, password, username, pin) {
+        try {
+            if (!supabaseClient) {
+                throw new Error('Supabase client not initialized');
+            }
+
+            var signInResult = await supabaseClient.auth.signInWithPassword({
+                email: email,
+                password: password
+            });
+
+            if (signInResult.error) throw signInResult.error;
+
+            currentUser = signInResult.data.user;
+            return await migrateExistingUser(username, pin);
+        } catch (error) {
+            console.error('migrateWithLegacyCredentials error:', error);
+            return { success: false, error: mapAuthError(error) };
         }
     }
 
@@ -555,8 +601,10 @@
     // Export functions for use in app.js
     window.authService = {
         initSupabase,
-        signInOrRegister,
+        signInWithUsernamePin,
+        registerWithUsernamePin,
         migrateExistingUser,
+        migrateWithLegacyCredentials,
         logout,
         getCurrentUser,
         isAuthenticated,
