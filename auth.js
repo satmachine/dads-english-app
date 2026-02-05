@@ -74,46 +74,94 @@
     }
 
     /**
-     * Register a new user
+     * Derive Supabase credentials from a username + PIN
      */
-    async function register(email, password) {
-        console.log('register() called with email:', email);
+    function deriveCredentials(username, pin) {
+        var name = username.toLowerCase().trim();
+        return {
+            email: name + '@dadsapp.local',
+            password: 'dadsapp_' + name + '_' + pin
+        };
+    }
+
+    /**
+     * Sign in with username + PIN. Auto-registers if the account doesn't exist yet.
+     */
+    async function signInOrRegister(username, pin) {
         try {
             if (!supabaseClient) {
                 throw new Error('Supabase client not initialized');
             }
 
-            console.log('Calling supabaseClient.auth.signUp...');
-            const redirectUrl = window.location.origin + window.location.pathname;
-            console.log('Email redirect URL:', redirectUrl);
-            const { data, error } = await supabaseClient.auth.signUp({
-                email: email,
-                password: password,
-                options: {
-                    emailRedirectTo: redirectUrl
-                }
+            var creds = deriveCredentials(username, pin);
+
+            // Try to sign in first
+            var signInResult = await supabaseClient.auth.signInWithPassword({
+                email: creds.email,
+                password: creds.password
             });
 
-            console.log('signUp response - data:', data, 'error:', error);
+            if (!signInResult.error) {
+                currentUser = signInResult.data.user;
+                return { success: true, user: signInResult.data.user };
+            }
 
-            if (error) throw error;
+            // If invalid credentials, the account may not exist yet — try to register
+            if (signInResult.error.message && signInResult.error.message.includes('Invalid login credentials')) {
+                var signUpResult = await supabaseClient.auth.signUp({
+                    email: creds.email,
+                    password: creds.password
+                });
 
-            console.log('Registration successful');
-            return { success: true, data };
+                if (signUpResult.error) throw signUpResult.error;
+
+                // If we got a session immediately, we're done
+                if (signUpResult.data.session) {
+                    currentUser = signUpResult.data.user;
+                    return { success: true, user: signUpResult.data.user, isNewUser: true };
+                }
+
+                // Otherwise try signing in right after registration
+                var loginResult = await supabaseClient.auth.signInWithPassword({
+                    email: creds.email,
+                    password: creds.password
+                });
+
+                if (loginResult.error) throw loginResult.error;
+
+                currentUser = loginResult.data.user;
+                return { success: true, user: loginResult.data.user, isNewUser: true };
+            }
+
+            // Some other sign-in error
+            throw signInResult.error;
         } catch (error) {
-            console.error('Registration error:', error);
+            console.error('signInOrRegister error:', error);
+
+            // Provide a friendlier error for wrong PIN
+            if (error.message && error.message.includes('Invalid login credentials')) {
+                return { success: false, error: 'Wrong PIN for this name. Please try again.' };
+            }
+
             return { success: false, error: error.message };
         }
     }
 
     /**
-     * Login user
+     * Migrate a legacy email/password user to the username+PIN system.
+     * Updates the current user's email and password to the derived credentials.
      */
-    async function login(email, password) {
+    async function migrateExistingUser(username, pin) {
         try {
-            const { data, error } = await supabaseClient.auth.signInWithPassword({
-                email: email,
-                password: password
+            if (!currentUser) {
+                throw new Error('No user logged in');
+            }
+
+            var creds = deriveCredentials(username, pin);
+
+            var { data, error } = await supabaseClient.auth.updateUser({
+                email: creds.email,
+                password: creds.password
             });
 
             if (error) throw error;
@@ -121,9 +169,44 @@
             currentUser = data.user;
             return { success: true, user: data.user };
         } catch (error) {
-            console.error('Login error:', error);
+            console.error('Migration error:', error);
             return { success: false, error: error.message };
         }
+    }
+
+    /**
+     * Save username and PIN to localStorage for auto-login
+     */
+    function saveCredentials(username, pin) {
+        localStorage.setItem('dadsapp_username', username.toLowerCase().trim());
+        localStorage.setItem('dadsapp_pin', pin);
+    }
+
+    /**
+     * Read saved credentials from localStorage
+     */
+    function getSavedCredentials() {
+        var username = localStorage.getItem('dadsapp_username');
+        var pin = localStorage.getItem('dadsapp_pin');
+        if (username && pin) {
+            return { username: username, pin: pin };
+        }
+        return null;
+    }
+
+    /**
+     * Clear saved credentials from localStorage
+     */
+    function clearSavedCredentials() {
+        localStorage.removeItem('dadsapp_username');
+        localStorage.removeItem('dadsapp_pin');
+    }
+
+    /**
+     * Check if the current user is a legacy (email/password) account that needs migration
+     */
+    function isLegacyUser() {
+        return currentUser && currentUser.email && !currentUser.email.endsWith('@dadsapp.local');
     }
 
     /**
@@ -472,11 +555,15 @@
     // Export functions for use in app.js
     window.authService = {
         initSupabase,
-        register,
-        login,
+        signInOrRegister,
+        migrateExistingUser,
         logout,
         getCurrentUser,
         isAuthenticated,
+        isLegacyUser,
+        saveCredentials,
+        getSavedCredentials,
+        clearSavedCredentials,
         loadCards,
         saveCards,
         saveCardProgress,
