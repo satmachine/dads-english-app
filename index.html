@@ -17,50 +17,19 @@
             <h1>Dad's English App</h1>
             <p class="auth-subtitle">Spaced-Repetition Flashcards</p>
 
-            <!-- Login Form -->
-            <div id="login-form-container">
-                <h2>Login</h2>
-                <form id="login-form">
-                    <label>
-                        Email
-                        <input type="email" id="login-email" required autocomplete="email" />
-                    </label>
-                    <label>
-                        Password
-                        <input type="password" id="login-password" required autocomplete="current-password" />
-                    </label>
-                    <button type="submit" class="primary-btn">Login</button>
-                    <p id="login-error" class="error-message hidden"></p>
-                </form>
-                <p class="auth-switch">
-                    Don't have an account? <a href="#" id="show-register">Register</a>
-                </p>
-            </div>
-
-            <!-- Register Form -->
-            <div id="register-form-container" class="hidden">
-                <h2>Create Account</h2>
-                <form id="register-form">
-                    <label>
-                        Email
-                        <input type="email" id="register-email" required autocomplete="email" />
-                    </label>
-                    <label>
-                        Password
-                        <input type="password" id="register-password" required autocomplete="new-password" />
-                    </label>
-                    <label>
-                        Confirm Password
-                        <input type="password" id="register-password-confirm" required autocomplete="new-password" />
-                    </label>
-                    <button type="submit" class="primary-btn">Register</button>
-                    <p id="register-error" class="error-message hidden"></p>
-                    <p id="register-success" class="success-message hidden"></p>
-                </form>
-                <p class="auth-switch">
-                    Already have an account? <a href="#" id="show-login">Login</a>
-                </p>
-            </div>
+            <form id="login-form">
+                <label>
+                    Your Name
+                    <input type="text" id="login-username" required autocomplete="username" placeholder="e.g. henry" />
+                </label>
+                <label>
+                    4-Digit PIN
+                    <input type="tel" id="login-pin" required maxlength="4" pattern="[0-9]{4}" inputmode="numeric" placeholder="e.g. 1234" autocomplete="off" />
+                </label>
+                <button type="submit" class="primary-btn">Start Learning</button>
+                <p id="login-error" class="error-message hidden"></p>
+            </form>
+            <p class="auth-hint">Use the same name & PIN on all your devices to sync your progress.</p>
         </div>
     </section>
 
@@ -70,8 +39,8 @@
             <div class="header-content">
                 <h1>Dad's English App</h1>
                 <div class="user-info">
-                    <span id="user-email"></span>
-                    <button id="logout-btn" class="small-nav">Logout</button>
+                    <span id="user-name"></span>
+                    <button id="logout-btn" class="small-nav">Switch User</button>
                 </div>
             </div>
             <nav>

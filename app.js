@@ -50,106 +50,18 @@ document.addEventListener('DOMContentLoaded', async () => {
 
     const authSection = document.getElementById('auth-section');
     const appContainer = document.getElementById('app-container');
-    const loginFormContainer = document.getElementById('login-form-container');
-    const registerFormContainer = document.getElementById('register-form-container');
     const loginForm = document.getElementById('login-form');
-    const registerForm = document.getElementById('register-form');
-    const showRegisterLink = document.getElementById('show-register');
-    const showLoginLink = document.getElementById('show-login');
     const logoutBtn = document.getElementById('logout-btn');
-    const userEmailSpan = document.getElementById('user-email');
+    const userNameSpan = document.getElementById('user-name');
 
     let supabaseInitialized = false;
 
-    // Set up login/register toggle handlers
-    showRegisterLink.addEventListener('click', (e) => {
-        e.preventDefault();
-        loginFormContainer.classList.add('hidden');
-        registerFormContainer.classList.remove('hidden');
-        document.getElementById('login-error').classList.add('hidden');
-    });
-
-    showLoginLink.addEventListener('click', (e) => {
-        e.preventDefault();
-        registerFormContainer.classList.add('hidden');
-        loginFormContainer.classList.remove('hidden');
-        document.getElementById('register-error').classList.add('hidden');
-        document.getElementById('register-success').classList.add('hidden');
-    });
-
-    // Handle registration
-    registerForm.addEventListener('submit', async (e) => {
-        e.preventDefault();
-
-        const email = document.getElementById('register-email').value;
-        const password = document.getElementById('register-password').value;
-        const confirmPassword = document.getElementById('register-password-confirm').value;
-        const errorEl = document.getElementById('register-error');
-        const successEl = document.getElementById('register-success');
-
-        errorEl.classList.add('hidden');
-        successEl.classList.add('hidden');
-
-        if (password !== confirmPassword) {
-            errorEl.textContent = 'Passwords do not match';
-            errorEl.classList.remove('hidden');
-            return;
-        }
-
-        if (password.length < 6) {
-            errorEl.textContent = 'Password must be at least 6 characters';
-            errorEl.classList.remove('hidden');
-            return;
-        }
-
-        if (!supabaseInitialized) {
-            errorEl.textContent = 'Error: Supabase is not configured. Please update config.js with your Supabase credentials.';
-            errorEl.classList.remove('hidden');
-            return;
-        }
-
-        const submitBtn = registerForm.querySelector('button[type="submit"]');
-        submitBtn.disabled = true;
-        submitBtn.textContent = 'Registering...';
-
-        try {
-            const result = await window.authService.register(email, password);
-
-            if (result.success) {
-                registerForm.reset();
-
-                if (result.data && result.data.session) {
-                    showApp(result.data.session.user);
-                    return;
-                }
-
-                successEl.textContent = 'Registration successful! Please check your email to verify your account, then login.';
-                successEl.classList.remove('hidden');
-
-                setTimeout(() => {
-                    registerFormContainer.classList.add('hidden');
-                    loginFormContainer.classList.remove('hidden');
-                    successEl.classList.add('hidden');
-                }, 3000);
-            } else {
-                errorEl.textContent = result.error || 'Registration failed. Please try again.';
-                errorEl.classList.remove('hidden');
-            }
-        } catch (error) {
-            errorEl.textContent = 'An unexpected error occurred: ' + error.message;
-            errorEl.classList.remove('hidden');
-        } finally {
-            submitBtn.disabled = false;
-            submitBtn.textContent = 'Register';
-        }
-    });
-
-    // Handle login
+    // Handle username + PIN form submission
     loginForm.addEventListener('submit', async (e) => {
         e.preventDefault();
 
-        const email = document.getElementById('login-email').value;
-        const password = document.getElementById('login-password').value;
+        const username = document.getElementById('login-username').value.trim();
+        const pin = document.getElementById('login-pin').value.trim();
         const errorEl = document.getElementById('login-error');
 
         errorEl.classList.add('hidden');
@@ -160,17 +72,31 @@ document.addEventListener('DOMContentLoaded', async () => {
             return;
         }
 
+        if (!/^[0-9]{4}$/.test(pin)) {
+            errorEl.textContent = 'PIN must be exactly 4 digits.';
+            errorEl.classList.remove('hidden');
+            return;
+        }
+
         const submitBtn = loginForm.querySelector('button[type="submit"]');
         submitBtn.disabled = true;
-        submitBtn.textContent = 'Logging in...';
+        submitBtn.textContent = 'Connecting...';
 
         try {
-            const result = await window.authService.login(email, password);
+            let result;
+
+            // Check if there's an existing legacy session that needs migration
+            if (window.authService.currentUser && window.authService.isLegacyUser()) {
+                result = await window.authService.migrateExistingUser(username, pin);
+            } else {
+                result = await window.authService.signInOrRegister(username, pin);
+            }
 
             if (result.success) {
-                showApp(result.user);
+                window.authService.saveCredentials(username, pin);
+                showApp(result.user, username);
             } else {
-                errorEl.textContent = result.error || 'Login failed. Please try again.';
+                errorEl.textContent = result.error || 'Could not connect. Please try again.';
                 errorEl.classList.remove('hidden');
             }
         } catch (error) {
@@ -178,18 +104,18 @@ document.addEventListener('DOMContentLoaded', async () => {
             errorEl.classList.remove('hidden');
         } finally {
             submitBtn.disabled = false;
-            submitBtn.textContent = 'Login';
+            submitBtn.textContent = 'Start Learning';
         }
     });
 
-    // Handle logout
+    // Handle "Switch User"
     logoutBtn.addEventListener('click', async () => {
         const result = await window.authService.logout();
         if (result.success) {
+            window.authService.clearSavedCredentials();
             appContainer.classList.add('hidden');
             authSection.classList.remove('hidden');
             loginForm.reset();
-            registerForm.reset();
 
             cards = [];
             renderReviewList();
@@ -197,9 +123,19 @@ document.addEventListener('DOMContentLoaded', async () => {
     });
 
     // Show the main app after successful authentication
-    async function showApp(user) {
+    async function showApp(user, username) {
         window.authService.currentUser = user;
-        userEmailSpan.textContent = user.email;
+        // Display the username (capitalized) in the header
+        var displayName = username || '';
+        if (!displayName) {
+            // Derive from email if username not passed (auto-login path)
+            var saved = window.authService.getSavedCredentials();
+            displayName = saved ? saved.username : '';
+        }
+        if (displayName) {
+            displayName = displayName.charAt(0).toUpperCase() + displayName.slice(1);
+        }
+        userNameSpan.textContent = displayName;
         authSection.classList.add('hidden');
         appContainer.classList.remove('hidden');
 
@@ -242,18 +178,45 @@ document.addEventListener('DOMContentLoaded', async () => {
 
     if (!supabaseInitialized) {
         authSection.classList.remove('hidden');
-    } else {
-        try {
-            const user = await window.authService.getCurrentUser();
-            if (user) {
+        return;
+    }
+
+    // Auto-login flow:
+    // 1. Check for existing Supabase session (legacy or current)
+    // 2. If legacy user → show username+PIN form for migration
+    // 3. If no session → try auto-login from saved credentials
+    // 4. If nothing saved → show username+PIN form
+    try {
+        const user = await window.authService.getCurrentUser();
+
+        if (user) {
+            if (window.authService.isLegacyUser()) {
+                // Legacy user with old email login — show form so they can set up username+PIN
+                console.log('Legacy user detected, showing migration form');
+                authSection.classList.remove('hidden');
+            } else {
+                // Already authenticated with new system
                 showApp(user);
+            }
+        } else {
+            // No active session — try auto-login from saved credentials
+            const saved = window.authService.getSavedCredentials();
+            if (saved) {
+                const result = await window.authService.signInOrRegister(saved.username, saved.pin);
+                if (result.success) {
+                    showApp(result.user, saved.username);
+                } else {
+                    // Saved credentials failed (e.g. PIN changed) — clear and show form
+                    window.authService.clearSavedCredentials();
+                    authSection.classList.remove('hidden');
+                }
             } else {
                 authSection.classList.remove('hidden');
             }
-        } catch (error) {
-            console.error('Error checking current user:', error);
-            authSection.classList.remove('hidden');
         }
+    } catch (error) {
+        console.error('Error during auto-login:', error);
+        authSection.classList.remove('hidden');
     }
 });
 
