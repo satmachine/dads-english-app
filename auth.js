@@ -111,6 +111,11 @@
         return message;
     }
 
+    function isAlreadyRegisteredError(error) {
+        var message = (error && error.message) ? error.message : '';
+        return message.includes('already registered') || message.includes('already exists');
+    }
+
     /**
      * Sign in with username + PIN.
      */
@@ -155,7 +160,20 @@
                 password: creds.password
             });
 
-            if (signUpResult.error) throw signUpResult.error;
+            if (signUpResult.error) {
+                if (isAlreadyRegisteredError(signUpResult.error)) {
+                    var existingLogin = await supabaseClient.auth.signInWithPassword({
+                        email: creds.email,
+                        password: creds.password
+                    });
+
+                    if (existingLogin.error) throw existingLogin.error;
+
+                    currentUser = existingLogin.data.user;
+                    return { success: true, user: existingLogin.data.user, isNewUser: false };
+                }
+                throw signUpResult.error;
+            }
 
             if (signUpResult.data.session) {
                 currentUser = signUpResult.data.user;
