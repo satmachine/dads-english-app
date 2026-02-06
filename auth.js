@@ -37,7 +37,7 @@
             window.SUPABASE_CONFIG.anonKey
         );
         console.log('Supabase client created successfully');
-        console.warn('For username+PIN accounts (@dadsapp.local), disable email confirmation in Supabase Auth > Providers > Email.');
+        console.warn('For username+PIN accounts (@dadsapp.example.com), disable email confirmation in Supabase Auth > Providers > Email.');
 
         return true;
     }
@@ -80,7 +80,7 @@
     function deriveCredentials(username, pin) {
         var name = username.toLowerCase().trim();
         return {
-            email: name + '@dadsapp.local',
+            email: name + '@dadsapp.example.com',
             password: 'dadsapp_' + name + '_' + pin
         };
     }
@@ -89,7 +89,7 @@
         var message = (error && error.message) ? error.message : 'Authentication failed.';
 
         if (message.includes('email rate limit exceeded')) {
-            return 'Too many attempts right now. Please wait a minute and try again.';
+            return 'Too many attempts. Please wait 60-120 seconds and try again.';
         }
 
         if (message.includes('Invalid login credentials')) {
@@ -98,6 +98,14 @@
 
         if (message.includes('Email not confirmed')) {
             return 'This account requires email confirmation in Supabase before it can sign in.';
+        }
+
+        if (message.toLowerCase().includes('invalid') && message.toLowerCase().includes('email')) {
+            return 'Email validation error. Check Supabase Auth configuration (see SETUP.md Step 5).';
+        }
+
+        if (message.includes('already registered') || message.includes('already exists')) {
+            return 'This name is already taken. Try signing in instead, or choose a different name.';
         }
 
         return message;
@@ -252,7 +260,7 @@
      * Check if the current user is a legacy (email/password) account that needs migration
      */
     function isLegacyUser() {
-        return currentUser && currentUser.email && !currentUser.email.endsWith('@dadsapp.local');
+        return currentUser && currentUser.email && !currentUser.email.endsWith('@dadsapp.local') && !currentUser.email.endsWith('@dadsapp.example.com');
     }
 
     /**

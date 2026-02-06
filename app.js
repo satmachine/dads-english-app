@@ -131,6 +131,12 @@ document.addEventListener('DOMContentLoaded', async () => {
             return;
         }
 
+        if (!/^[a-zA-Z0-9]{3,20}$/.test(username)) {
+            errorEl.textContent = 'Name must be 3-20 letters/numbers only (no spaces or symbols).';
+            errorEl.classList.remove('hidden');
+            return;
+        }
+
         if (!/^[0-9]{4}$/.test(pin)) {
             errorEl.textContent = 'PIN must be exactly 4 digits.';
             errorEl.classList.remove('hidden');

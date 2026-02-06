@@ -73,7 +73,15 @@ const SUPABASE_CONFIG = {
 4. Turn **OFF** "Confirm email" for this app
 5. Save changes
 
-> Why: this app uses generated emails like `henry@dadsapp.local` for name+PIN login. If email confirmation is required, login can fail or hit email rate limits.
+> Why: this app uses generated emails like `henry@dadsapp.example.com` for name+PIN login. If email confirmation is required, login can fail or hit email rate limits.
+
+#### Troubleshooting "Invalid Email" Errors
+
+If you see "invalid email" errors during registration:
+1. Make sure "Confirm email" is **disabled** in Supabase Auth > Providers > Email
+2. The app uses the RFC 2606 reserved domain `.example.com` which should pass validation
+3. Wait 60-120 seconds if you hit rate limiting, then try again
+4. Check Supabase Auth logs for any additional error details
 
 ### Step 6: Launch the App
 
@@ -182,13 +190,14 @@ All existing features work the same:
 2. Make sure you ran the database-schema.sql script
 3. Check Supabase dashboard for any errors in the database
 
-### "email rate limit exceeded"
+### "email rate limit exceeded" or "Invalid Email"
 
 **Solutions**:
 1. Wait 60-120 seconds and retry
 2. In Supabase, go to **Authentication** > **Providers** > **Email**
 3. Make sure **Confirm email** is OFF for this name+PIN setup
 4. Use **Start Learning** for existing users (do not click Create New Account unless it is a new user)
+5. The app uses `@dadsapp.example.com` domain for username+PIN accounts (RFC 2606 reserved domain)
 
 ### Audio Upload Fails
 
@@ -203,8 +212,9 @@ All existing features work the same:
 
 **Solutions**:
 1. Verify the exact same name and PIN are used on every device
-2. Check Supabase **Authentication > Users** for `<name>@dadsapp.local`
+2. Check Supabase **Authentication > Users** for `<name>@dadsapp.example.com`
 3. If moving from an old email account, use **Migrate old email account** on the login screen
+4. Older accounts may use `@dadsapp.local` - the app supports both domains for backward compatibility
 
 ---
 
@@ -280,6 +290,9 @@ A: Contact the Supabase project admin or use the Supabase dashboard to delete yo
 
 **Q: Is my data encrypted?**
 A: Data is transmitted over HTTPS. Database encryption depends on your Supabase plan.
+
+**Q: What email domain does the app use for username+PIN accounts?**
+A: The app uses `@dadsapp.example.com`, an RFC 2606 reserved domain for documentation/examples.
 
 ### Need Help?
 
