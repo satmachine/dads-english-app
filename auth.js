@@ -87,24 +87,25 @@
 
     function mapAuthError(error) {
         var message = (error && error.message) ? error.message : 'Authentication failed.';
+        var messageLower = message.toLowerCase();
 
-        if (message.includes('email rate limit exceeded')) {
+        if (messageLower.includes('email rate limit exceeded')) {
             return 'Too many attempts. Please wait 60-120 seconds and try again.';
         }
 
-        if (message.includes('Invalid login credentials')) {
+        if (messageLower.includes('invalid login credentials')) {
             return 'Wrong name or PIN. Please try again.';
         }
 
-        if (message.includes('Email not confirmed')) {
+        if (messageLower.includes('email not confirmed')) {
             return 'This account requires email confirmation in Supabase before it can sign in.';
         }
 
-        if (message.toLowerCase().includes('invalid') && message.toLowerCase().includes('email')) {
+        if (messageLower.includes('invalid') && messageLower.includes('email')) {
             return 'Email validation error. Check Supabase Auth configuration (see SETUP.md Step 5).';
         }
 
-        if (message.includes('already registered') || message.includes('already exists')) {
+        if (messageLower.includes('already registered') || messageLower.includes('already been registered') || messageLower.includes('already exists')) {
             return 'This name is already taken. Try signing in instead, or choose a different name.';
         }
 
@@ -113,7 +114,8 @@
 
     function isAlreadyRegisteredError(error) {
         var message = (error && error.message) ? error.message : '';
-        return message.includes('already registered') || message.includes('already exists');
+        var messageLower = message.toLowerCase();
+        return messageLower.includes('already registered') || messageLower.includes('already been registered') || messageLower.includes('already exists');
     }
 
     /**
